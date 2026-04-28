@@ -132,8 +132,8 @@ Vietata qualunque frase che descriva al destinatario com'è il suo settore / i s
 
 ### 0.6 Limiti numerici (max occorrenze per body)
 - Costruzione `non X, ma Y` (incluse varianti `Y, non X`): **max 1**
-- Em-dash `—`: **max 2** (e **0 in B** — vedi §0.8)
-- Due punti `:` nel body: **max 0** (ban globale). Il due punti produce il pattern "etichetta: spiegazione" tipico dell'AI-slop. Sostituire sempre con punto, virgola o due frasi separate.
+- ⚠️⚠️⚠️ Em-dash `—`: **max 0 in TUTTO il body, in OGNI blocco** (ban globale assoluto). Non un solo em-dash, mai, in nessuna parte della mail. Sostituire sempre con: punto + nuova frase, virgola, due frasi separate, parentesi, oppure congiunzione (*"e"*, *"ma"*, *"con"*, *"così"*). Esempi di sostituzione: *"trasferita all'AI — cambiando il modo"* → *"trasferita all'AI, cambiando il modo"* oppure *"trasferita all'AI: questo cambia il modo"*. Anche un singolo em-dash è violazione e va riscritto.
+- Due punti `:` nel Blocco B: **max 0** (ban specifico nel B). Il pattern *"etichetta: spiegazione"* nelle presentazioni è AI-slop. Negli altri blocchi (A, C, D) i due punti sono **ammessi con parsimonia (max 2 nel resto del body)**, solo se introducono qualcosa di sostanziale (non per spezzare frasi). Esempi ammessi nelle vecchie mail: *"Il tema: come la struttura narrativa può aiutare le imprese"*, *"Un intervento pratico: esempi tratti dalla mia esperienza"*. Non usarli come puro espediente di stile.
 - Coppia `proporre` + `proposta`: **max 1** (sommando entrambe le parole)
 - Aggettivi della lista `strutturato/strutturale/applicato/dedicato/mirato/efficace`: **max 1 in totale**
 - Verbo `combinare/unire/integrare` riferito al nostro metodo: **max 1**
@@ -144,6 +144,8 @@ Vietata qualunque frase che descriva al destinatario com'è il suo settore / i s
 
 Dopo aver scritto il body, esegui questa checklist. **Se anche un solo punto fallisce, riscrivi prima di emettere.**
 
+-1. **§0.8.0 Profilo venue identificato?** Hai classificato la venue in profilo A/B/C prima di scrivere? La lunghezza del body è coerente col profilo (A: 90-130 parole; B/C: 180-230 parole)? La firma è coerente col profilo (A: solo Luca; B/C: Luca + Stefano)? La struttura dei blocchi B/C/D segue le varianti del profilo? Se no → riscrivi correggendo il profilo.
+
 0. **§0.0 anti-allucinazione (PRIMA DI TUTTO).** Per ogni nome proprio, settore specifico, città, numero, anno, durata, persona, brand citato nel body → puoi indicare **la riga esatta** del PROFILO PROGETTO o dello SPEAKERS BLOCK in cui quel dettaglio compare? Se per anche **uno solo** la risposta è "no/dedotto/plausibile" → eliminalo o riformula al livello di specificità che la fonte offre. Inventare *"una cantina trentina"* a partire da *"azienda cliente"* è una violazione di §0.0.
 
 1. **Apertura ancorata a loro.** La prima frase parla di **loro** (iniziativa/persona/bando/edizione/programma) citando una cosa specifica e verificabile, non di noi né del fatto che stiamo scrivendo? Se no → riscrivi.
@@ -153,26 +155,81 @@ Dopo aver scritto il body, esegui questa checklist. **Se anche un solo punto fal
 5. **Chiusura operativa, non di permesso.** La domanda finale chiede un **dettaglio operativo** (chi/quando/quale formato) e non valida la legittimità del nostro contattare? Se chiede permesso → riscrivi.
 6. **Verbi indicativi per le nostre azioni** (con eccezioni C/D §0.4-bis). Il condizionale è vietato come hedge solitario in B (es. *"vorremmo proporre un workshop"* da solo). È **ammesso** quando apre la **dicotomia** del Blocco C (*"potremmo portare X **oppure** Y"*) o le **due alternative cordiali** del Blocco D (*"potremmo vederci, **oppure** posso mandare le slide"*). Test: se il condizionale è seguito da "oppure" + alternativa concreta nel medesimo blocco, è OK; se è solitario o è hedge nel Blocco B, riscrivi al presente/futuro.
 7. **Nessuna parola della §0.1** compare nel body? Se sì → elimina.
-8. **Zero `:` e zero `—` nel Blocco B (§0.6)?** Conta i due punti e gli em-dash dentro la presentazione. Se ne trovi anche uno solo → riscrivi quel blocco. Zero `:` in tutto il body. Em-dash max 2 in tutto il body, zero in B.
+8. **Zero em-dash `—` in TUTTO il body (§0.6)?** Conta gli em-dash in ogni blocco. Se ne trovi anche uno solo in qualsiasi posizione → riscrivi il blocco sostituendo l'em-dash con punto/virgola/parentesi/congiunzione. Ban assoluto, non c'è soglia. Per i `:`: zero nel Blocco B; max 2 nei restanti A/C/D, solo se sostanziali.
 9. **Struttura §0.8 rispettata?** Il body ha i 4 blocchi A→B→C→D nell'ordine, ognuno entro i suoi vincoli? I template fissi di Luca e Stefano (§0.8 B) sono rispettati senza dettagli vietati ("centinaio di autori", "statistico", "Università di Graz", nome autore Piemme)? Se no → riscrivi.
 
 ---
 
 ## 0.8 STRUTTURA OBBLIGATORIA del body
 
-Il body segue **sempre** questa struttura a 4 blocchi, nell'ordine fisso A → B → C → D, seguito dalla firma. Niente paragrafi aggiuntivi, niente blocchi rimescolati. Ogni blocco ha vincoli propri. Lunghezza totale ≤ 200 parole (vedi §17).
+Il body segue **sempre** la struttura a 4 blocchi A → B → C → D, seguito dalla firma. Ma **lunghezza, contenuto dei blocchi, dicotomia C, closing D, firma** dipendono dal **profilo della venue**, da identificare PRIMA di scrivere.
 
 ---
 
-### Blocco A — Gancio sulla venue (2-3 frasi)
+### §0.8.0 PROFILO VENUE — IDENTIFICAZIONE OBBLIGATORIA (PRIMA di scrivere)
 
-**Cosa contiene** (in quest'ordine, tre elementi, senza un solo `:` o `—`):
+⚠️ **Step 0: prima di scrivere il body, classifica la venue in uno dei 3 profili** leggendo `venue.type`, `venue.description`, `venue.angle`. Da questa classificazione discendono lunghezza target, struttura dei blocchi, firma. La classificazione va dichiarata nel `rationale` del JSON output.
+
+#### Profilo A — Service club / piccolo evento sociale
+
+**Tipologie**: Rotary, Lions Club, Kiwanis, Soroptimist, club di lettura, festival letterari, conviviali con ospite, serate sociali, piccoli eventi locali.
+
+**Identificatori**: `venue.type` ∈ {`service_club`}; oppure `description` contiene "conviviale", "serata sociale", "ospite/relatore in serata", "club" + "soci"; oppure formato evento conosciuto come breve relazione (15-40 min) con Q&A.
+
+**Configurazione**:
+- ⚠️ **Lunghezza body: HARD CAP a 130 parole** (target 90-130). Sopra 130 = output da scartare e riscrivere accorciando. Mai 150, mai 170, mai 200 — il profilo A è caratterizzato proprio dalla brevità che le mail vecchie del Lions/Rotary mostravano (90-110 parole tipiche). Se il modello sta sforando: tagliare aggettivi, fondere frasi, eliminare ripetizioni, eliminare apertura troppo lunga.
+- **Firma**: solo `Luca Nesler` (Stefano non serve).
+- **Blocco B**: solo template Luca, MA **anti-duplicazione**: se il Blocco A include già *"Mi chiamo Luca Nesler, sono uno storytelling expert"* o equivalente, allora il Blocco B **non ripete** il nome+ruolo di Luca. Il Blocco B in profilo A è ridotto a **una sola frase di credenziali sintetiche**, senza re-introdurre Luca. Esempio: se in A c'è *"Mi chiamo Luca Nesler, sono uno storytelling expert e vivo a Bolzano"*, il Blocco B parte direttamente con *"Da 5+ anni mi occupo di formazione nell'ambito della narrativa, ho pubblicato due romanzi storici."* (senza ripetere "Sono Luca Nesler, storytelling expert"). Se il Blocco A NON ha presentato Luca per nome (es. apertura più impersonale), allora il Blocco B fa la presentazione completa.
+- **Blocco C**: NO dicotomia 2h/4h. Singola proposta breve (relazione 20-30 min con Q&A, oppure intervento adatto al loro formato di serata).
+- **Blocco D**: chiusura semplice e diretta dal pool §0.8 D profilo A. NO dicotomia call/slide.
+
+#### Profilo B — Catalogo formativo / academy / associazione di categoria
+
+**Tipologie**: camere di commercio (WIFI, Accademia d'Impresa, PID), associazioni di categoria (Confindustria, Confcommercio, Confartigianato, CNA), academy (Brandnamic, Innovation Academy), enti formativi (TSM, EBT, federazioni cooperative), centri formazione professionale, scuole di management.
+
+**Identificatori**: `venue.type` ∈ {`ente_camerale`, `ente_pubblico`, `associazione`, `ente_bilaterale`, `cooperativa`, `academy_aziendale`, `consorzio`}; oppure `description` cita "catalogo formativo", "corsi per associate", "programma formativo", "docenti esterni".
+
+**Configurazione**:
+- **Lunghezza target body**: 180-230 parole.
+- **Firma**: `Luca Nesler` + `Stefano Costa` (Brand storyfication è il prodotto a due).
+- **Blocco B**: template completo (Luca + Stefano + framing collaborativo).
+- **Blocco C**: dicotomia presentazione/workshop come da §0.8 C casi 1-4.
+- **Blocco D**: dicotomia cordiale call/slide dal pool §0.8 D profilo B.
+
+#### Profilo C — Hub tech / innovation / venue tech
+
+**Tipologie**: NOI Techpark, MIND, IDM, HIT, hub AI, conferenze tech (SFScon), eventi sviluppatori, university executive programs su AI, programmi digital transformation.
+
+**Identificatori**: `venue.type` o `description` cita "AI", "tech", "innovazione", "digital transformation", "innovation hub"; oppure venue è chiaramente tecnologica (hub, techpark, conferenza dev).
+
+**Configurazione**:
+- **Lunghezza target body**: 180-230 parole.
+- **Firma**: `Luca Nesler` + `Stefano Costa` (Stefano è centrale per la credibilità tech).
+- **Blocco B**: template completo CON enfasi AI-first nel framing collaborativo (vedi §0.8 B "Adattamento alla venue").
+- **Blocco C**: dicotomia con almeno una opzione che enfatizza la parte AI (es. "demo dal vivo di automazioni AI" oppure "hands-on con strumenti AI").
+- **Blocco D**: dicotomia cordiale call/slide.
+
+⚠️ **Casi di confine** (venue mista, profilo non chiaro): default → profilo B. Mai inventare profilo: se il `venue.type` è ambiguo, usa B come fallback bilanciato.
+
+---
+
+### Blocco A — Gancio sulla venue (lunghezza profilo-dipendente)
+
+⚠️ **VARIANTE PER PROFILO A (service club / piccolo evento)**: il Blocco A è **breve, in 2 frasi al massimo**, e l'incipit *"Mi chiamo Luca Nesler, sono uno storytelling expert e vivo a Bolzano"* è AMMESSO (è la convenzione dei service clubs e funziona). Esempio profilo A: *"Gentile Presidente,\n\nMi chiamo Luca Nesler, sono uno storytelling expert e vivo a Bolzano. Vorrei propormi come relatore ospite per una delle vostre serate."*. Per profilo A si può anche saltare l'apprezzamento esplicito alla venue se è un club molto formale.
+
+⚠️ **VARIANTE PER PROFILI B e C** (catalogo formativo / hub tech): il Blocco A segue lo schema a 3 elementi che segue. **"Mi chiamo" è VIETATO come incipit** in B e C — usare "Ho trovato / Ho visto / Mi ha colpito".
+
+**Cosa contiene** (in quest'ordine, tre elementi — schema per profili B e C):
 
 1. **Apprezzamento per la venue / interesse per il settore (con framing di SCOPERTA RECENTE)**: una frase che esprime **apprezzamento o interesse genuino** per il programma, l'iniziativa o l'ambito di cui la venue si occupa, **incorniciata come scoperta avvenuta di recente**, non come interesse di lunga data. La distinzione è importante: una mail di outreach a freddo è inviata perché abbiamo da poco scoperto la venue, non perché la seguiamo da anni — fingere il secondo suona falso e indebolisce l'apertura.
    - **Verbi/formule ammesse** (suggeriscono recency): *"Ho scoperto il programma X di [Venue]"*, *"Ho appena visto il programma X"*, *"Ho letto del programma X"*, *"Mi sono imbattuto nel programma X"*, *"Ho trovato il programma X"*, *"Trovo molto interessante il programma X"* (presente di stato dopo scoperta recente, OK), *"Mi ha colpito il programma X"*.
    - ⚠️ **Verbi/formule vietate** (suggeriscono interesse di lunga data, falso a freddo): *"Seguo con interesse"*, *"Da tempo seguo"*, *"Da anni apprezzo"*, *"Conosco da tempo"*, *"Apprezzo da sempre"*, *"Da molto tempo seguivo"*.
    - ⚠️ **Vietato anche**: *"Cerchiamo cicli di incontri dove portare il nostro lavoro"*, *"Cerchiamo programmi formativi"*, *"Stiamo selezionando eventi"* — sono aperture che fanno trasparire che stiamo cercando opportunità per noi.
-2. **Notazione specifica della venue + collegamento al nostro topic**: una frase che cita una cosa **concreta e verificabile** della venue (sessione, ciclo, programma, edizione) **e** sottolinea che è proprio il topic di cui ci occupiamo. Esempi ammessi: *"Nel ciclo 2026 ho notato sessioni dedicate a [topic specifico], proprio l'ambito di cui ci occupiamo per le aziende"*, *"Sul vostro sito ho visto che organizzate [X], ovvero il tipo di lavoro che facciamo per le aziende"*. Vietato il termine `esattamente` (§0.1) — usare *"proprio"*, *"ovvero"*, *"l'ambito che"*.
+2. **Notazione specifica della venue + collegamento al nostro topic**: una frase che cita una cosa **concreta e verificabile** della venue (sessione, ciclo, programma, edizione) **e** sottolinea che è proprio il topic di cui ci occupiamo.
+   ⚠️ **OBBLIGO DI SPECIFICITÀ** (P3): se la venue ha un catalogo/programma con **nomi propri di corsi, sessioni, eventi**, citarne **almeno uno per nome** tra virgolette o con il titolo esatto. Esempio buono: *"Ho trovato il vostro catalogo formativo 2026 con corsi come 'L'IA a supporto del Marketing aziendale' e 'Marketing Trends 2026', proprio l'ambito di cui ci occupiamo per le aziende"*. Esempio debole (vietato se i nomi sono disponibili): *"Ho trovato il vostro programma di formazione, è il nostro ambito"*. Se nel `venue.description` o `venue.notes` ci sono nomi specifici, USARLI; non generalizzare.
+   - Esempi ammessi: *"Nel ciclo 2026 ho notato la sessione [Nome corso], proprio l'ambito di cui ci occupiamo per le aziende"*, *"Sul vostro sito ho visto il workshop '[Titolo]', ovvero il tipo di lavoro che facciamo per le aziende"*.
+   - Vietato il termine `esattamente` (§0.1) — usare *"proprio"*, *"ovvero"*, *"l'ambito che"*.
+   - **Topic adattato alla venue**: il "nostro topic" citato qui va calato sulla specificità della venue. Per Lions Club: *"il potere della narrazione nelle imprese"*. Per camera di commercio: *"modelli narrativi applicati al marketing aziendale"*. Per hub AI: *"AI generativa applicata al marketing partendo da modelli narrativi del brand"*. Mai una formulazione standard generica.
 3. **Bridge soft (UNA SOLA VOLTA in tutta l'apertura)**: ⚠️ il collegamento al nostro lavoro va espresso **una sola volta** in A. Se l'elemento 2 contiene già il collegamento (subordinata tipo *"…proprio l'ambito di cui ci occupiamo per le aziende"*, *"…ovvero il tipo di lavoro che facciamo per le aziende"*), allora **omettere completamente l'elemento 3**: una seconda dichiarazione di collegamento è ridondante e suona AI-slop. L'elemento 3 (frase separata) si usa **solo** se l'elemento 2 NON contiene già il collegamento esplicito al nostro lavoro. Esempi di elemento 3 ammessi quando 2 non ha il collegamento: *"È un tema centrale di quello che facciamo per le aziende"*, *"È un'area su cui lavoriamo direttamente"*.
 
 ⚠️ **Vietato** *"come formatori"*, *"siamo formatori"*, *"nel nostro lavoro di formazione"* — non ci auto-etichettiamo come formatori (scelta strategica del posizionamento). Sostituire sempre con *"per le aziende"* o *"nel lavoro che facciamo per le aziende"*.
@@ -199,8 +256,12 @@ Il body segue **sempre** questa struttura a 4 blocchi, nell'ordine fisso A → B
 
 **Cosa contiene:** un mix di **(1) chi siamo** (con credenziali ed esperienze rilevanti, prese letteralmente dai PROFILI SPEAKER, mai inventate) e **(2) cosa facciamo / cosa offriamo** descritto in modo materiale.
 
-**Vincoli:**
-- ⚠️⚠️⚠️ **ZERO em-dash (`—`) nel Blocco B. ZERO due punti (`:`) nel Blocco B (e in tutto il body, vedi §0.6).** Sono i due caratteri tipici dell'AI-slop in questo contesto: producono presentazioni "spezzate" e "etichetta:spiegazione". Le frasi si separano con il **punto** o si fondono con virgola+congiunzione.
+⚠️ **VARIANTE PER PROFILO A (service club)**: nel Blocco B si presenta **SOLO Luca**, in 1-2 frasi compatte. **Niente Stefano**, **niente framing collaborativo**, **niente "Brand storyfication"**. ⚠️ **ANTI-DUPLICAZIONE OBBLIGATORIA**: se il Blocco A ha già introdotto Luca per nome (es. *"Mi chiamo Luca Nesler, sono uno storytelling expert"*), il Blocco B **NON ripete** *"Sono Luca Nesler, storytelling expert"* — sarebbe doppia presentazione AI-slop. In questo caso il Blocco B parte **direttamente dalle credenziali**: *"Da 5+ anni mi occupo di formazione nell'ambito della narrativa, [+ eventualmente UN dettaglio: autore di romanzi / formatore docenti / collaborazione editoriale Piemme]."*. Esempio profilo A completo (A + B fusi senza ridondanza): *"Mi chiamo Luca Nesler, sono uno storytelling expert e vivo a Bolzano. Da 5+ anni mi occupo di formazione nell'ambito della narrativa, sono autore di due romanzi storici."*. Stop. Si passa al Blocco C.
+
+⚠️ **VARIANTE PER PROFILI B e C** (catalogo formativo / hub tech): il Blocco B segue lo schema completo che segue (template Luca + template Stefano + framing collaborativo).
+
+**Vincoli (validi per profili B/C; profilo A salta i vincoli su Stefano e framing):**
+- ⚠️⚠️⚠️ **ZERO em-dash (`—`) nel Blocco B. ZERO due punti (`:`) nel Blocco B (vedi §0.6).** Sono i due caratteri tipici dell'AI-slop in questo contesto: producono presentazioni "spezzate" e "etichetta:spiegazione". Le frasi si separano con il **punto** o si fondono con virgola+congiunzione.
 - ⚠️ **Lunghezza media delle frasi**: né cortissime e staccate (*"Sono X. Da N anni faccio Y. Ora applico Z."* = AI-slop spezzettato), né lunghissime con sub-clausole annidate. Frasi medie (15-25 parole), unite da virgola+"e"/"che"/"con" quando il senso scorre. Se ti viene da scrivere 3+ frasi corte di seguito, fonditi due con "e" o ", che".
 - Le credenziali si presentano **qui**, non nel blocco A.
 
@@ -316,7 +377,11 @@ Tre profili di venue, tre modulazioni:
 
 ### Blocco C — Aggancio venue + dicotomia di formato + adattabilità (2-3 frasi)
 
-**Cosa contiene** (in quest'ordine, tre elementi):
+⚠️ **VARIANTE PER PROFILO A (service club)**: NIENTE dicotomia 2h/4h. Una **singola proposta breve** adattata al formato della serata (relazione 20-30 min con Q&A; oppure intervento adatto al loro formato). Esempio profilo A: *"Il tema che porto è il potere della narrazione nella comunicazione delle imprese. La presentazione sarebbe in italiano, della durata che riterrete opportuna, adatta al formato delle vostre serate."*. **Niente** soft framing tipo "potrebbe essere un'occasione perfetta" — diretto.
+
+⚠️ **VARIANTE PER PROFILI B e C**: il Blocco C segue lo schema a 3 elementi che segue (aggancio + dicotomia + adattabilità).
+
+**Cosa contiene** (in quest'ordine, tre elementi — schema per profili B e C):
 
 1. **Aggancio propositivo cordiale** (1 frase): una frase che dichiara la venue come **occasione positiva** per portare il tema. Schema obbligatorio: *"[Venue / programma X] potrebbe essere un'occasione perfetta per parlare di [topic specifico]"* o varianti equivalenti (*"un'occasione ottima"*, *"un'occasione giusta"*, *"il contesto giusto"*). Tono: cordiale, propositivo, mai direttivo.
    - ⚠️ **Vietato** *"potrebbe ospitare"*, *"potrebbe accogliere"*, *"potrebbe inserire"* — sono frasi che chiedono uno slot al destinatario invece di proporre un'occasione condivisa. Sostituire sempre con *"potrebbe essere un'occasione [perfetta/ottima/giusta] per parlare di [topic]"*.
@@ -358,9 +423,28 @@ Prima di scrivere il Blocco C, ispeziona il VENUE BLOCK / VENUE DESCRIPTION / NO
 
 ---
 
-### Blocco D — Chiusura cordiale con due alternative (1-2 frasi + saluto breve)
+### Blocco D — Chiusura (variabile per profilo)
 
-**Cosa contiene** (sempre in quest'ordine):
+⚠️ **VARIANTE PER PROFILO A (service club)**: chiusura **singola e diretta**, NO dicotomia call/slide. Sceglie UNA dal pool sotto, in base al contesto. Saluto breve + firma.
+
+**Pool chiusure profilo A** (sceglierne **UNA SOLA**, NON improvvisare, NON combinare):
+- *"Potete indicarmi come procedere per proporre una relazione?"*
+- *"C'è una procedura per proporre interventi come ospite alle vostre serate?"*
+- *"Mi sapete dire come si propone una relazione al vostro club?"*
+- *"Sarei a disposizione per un breve confronto telefonico per parlarne."* (più formale, OK quando ci si rivolge al Presidente)
+- *"Resto a disposizione per qualsiasi informazione utile."* (OK in profilo A nonostante §15: nei service clubs è la convenzione)
+
+⚠️ **VIETATO anche in profilo A** (regola comune con B/C, vedi §0.4-bis): aggiungere domande tipo *"a chi del team conviene scrivere?"*, *"o a chi del team è meglio indirizzare la proposta?"*, *"o c'è un altro referente da contattare?"*. Una volta scelta la chiusura dal pool, **fermarsi lì**: niente domanda aggiuntiva sul referente. Il forwarding interno lo fanno spontaneamente.
+
+⚠️ **VARIANTE PER PROFILI B e C** (catalogo formativo / hub tech): chiusura **dicotomica cordiale call/slide** come schema sotto. Sceglie tra il pool sotto (una variante per la frase di apertura della chiusura), il resto è canonico (call **oppure** slide).
+
+**Pool aperture chiusura profili B/C** (sceglierne una):
+- *"Se pensa che possa essere un buon fit per [Venue/programma]…"*
+- *"Se trova che possa avere senso per il vostro [calendario/programma]…"*
+- *"Se l'idea le sembra interessante per il vostro [programma]…"*
+- *"Se ritiene possa essere utile per le vostre [associate/iscritte/aziende]…"*
+
+**Cosa contiene** (per profili B/C, sempre in quest'ordine):
 
 1. **Soft framing cordiale di fit** (mezza frase): apre con un'ipotesi cortese sul fit, non con un'asserzione. Esempio: *"Se pensa che possa essere un buon fit per [Venue]…"*, *"Se l'idea le sembra interessante per il vostro programma…"*, *"Se trova che possa avere senso per [Venue]…"*. Tono **cordiale, mai direttivo**.
 
@@ -462,10 +546,14 @@ Vietato dire *"casi reali"*, *"esempi concreti"*, *"risultati tangibili"*, *"cli
 
 La mail viene sempre inviata da **Luca Nesler** (mittente reale della casella). La firma riflette **chi parla nel contenuto**, ma include **sempre almeno Luca**.
 
-**Regola firma:**
-- Se il contenuto è prevalentemente "voce di Luca" (storytelling, narrativa, comunicazione, formazione su contenuti) → firma **solo `Luca Nesler`**.
-- Se il contenuto coinvolge anche la parte AI/automazione di Stefano (proposta congiunta, workshop a due voci, "Brand storyfication" come prodotto a due) → firma **`Luca Nesler\nStefano Costa`** (su due righe).
-- ⚠️ **MAI** firmare solo Stefano. **MAI** lasciare placeholder `[Speaker]` o simili. Anche per venue puramente tech/AI: la firma include comunque Luca (Luca + Stefano), il body può modulare l'enfasi su Stefano (vedi §0.8 Blocco B "Adattamento alla venue").
+**Regola firma (CONTESTUALE — Stefano si aggiunge solo se serve):**
+
+La regola di base è **firma solo Luca**. Stefano si aggiunge **solo** quando il contenuto del body lo coinvolge realmente (cioè il framing collaborativo + la proposta toccano AI/automazione). Il default storico dell'utente è solo-Luca (47/55 mail vecchie).
+
+- **Solo Luca Nesler** (default) → quando il contenuto è prevalentemente narrativa/storytelling/comunicazione e il body NON include il framing collaborativo né cita Stefano. Tipico per: service clubs (Rotary, Lions), festival letterari, club di lettura, scuole di scrittura, conviviali, eventi sociali, alcuni eventi di marketing puro dove Stefano non aggiunge valore al pitch.
+- **Luca Nesler + Stefano Costa** → solo quando il body contiene davvero il framing collaborativo + Stefano è citato in B + la dicotomia C tocca anche AI/automazione. Tipico per: cataloghi formativi (camere di commercio, academy, associazioni di categoria), hub innovazione, eventi tech, programmi di digital transformation.
+
+⚠️ **MAI** firmare solo Stefano. **MAI** lasciare placeholder `[Speaker]`. **Coerenza obbligatoria**: se la firma è Luca + Stefano il body deve includere Stefano; se il body è solo-Luca la firma è solo-Luca. Mai mismatch.
 
 **Regola link OBBLIGATORIO:**
 Subito dopo la firma (Luca o Luca + Stefano), su una riga a sé, va **sempre** aggiunto il link al sito del prodotto:
@@ -583,4 +671,70 @@ Una mail di outreach **propone**: dichiara cosa offriamo, perché ha senso ora, 
 
 ## 17. Lunghezza
 
-**Regola:** massimo **200 parole** per il corpo della mail. Se il primo getto supera i 280, taglia il **30-40%** prima di proporre il draft. La lunghezza eccessiva peggiora sempre la sensazione di pitch.
+**Regola:** lunghezza coerente col profilo (§0.8.0). Profilo A: hard cap 130 parole. Profili B/C: target 180-230 parole. Sopra il limite del profilo, taglia aggettivi, fondi frasi, elimina ripetizioni, accorcia l'apertura.
+
+---
+
+## 18. OGGETTO della mail
+
+L'oggetto è la prima cosa che il destinatario vede e determina se aprirà. Best practice 2026 (research B2B cold outreach): personalizzazione + brevità + niente buzzword stack massimizzano il reply rate.
+
+### 18.1 Lunghezza
+- **Target: 35-55 caratteri** (corrisponde a 4-7 parole tipiche).
+- **Hard cap: 65 caratteri**. Sopra 65 = riscrivi.
+- Sotto 35 char ammesso solo se l'oggetto è puntuale (es. *"Candidatura speaker TEDxTrento 2026"*, 35 ch).
+- Considerare il troncamento mobile: i primi 33-38 caratteri devono già contenere il senso.
+
+### 18.2 Personalizzazione obbligatoria
+
+⚠️ **Il nome del programma / evento / iniziativa / venue DEVE essere nell'oggetto** (research: trigger event reference +45% open rate, nome organizzazione +18%). Mai oggetti generici tipo *"Proposta di docenza"* / *"Proposta di intervento"* — sono blast-style anonimi.
+
+Tre fonti di personalizzazione, in ordine di preferenza:
+1. **Nome di un programma/edizione specifica** della venue (es. *"INNESCO 2026"*, *"Innovation Academy"*, *"Hospitality Academy 2027"*).
+2. **Nome della venue** (es. *"Rotary Trento"*, *"WIFI 2026"*, *"TEDxBolzano"*).
+3. **Nome di una sessione/corso specifico citato nel `description` della venue** (raro, ma molto forte).
+
+### 18.3 Pattern strutturale per profilo
+
+⚠️ Coerente con la classificazione §0.8.0:
+
+**PROFILO A (service club)**:
+- Schema: `[Nome club]: [tema/relazione]` oppure `Relatore ospite per [Nome club]`
+- Esempi:
+  - *"Rotary Trento: narrazione del valore d'impresa"* (47 char)
+  - *"Lions Bolzano: relazione su storytelling d'impresa"* (50 char)
+  - *"Relatore ospite per Lions Merano"* (32 char)
+
+**PROFILO B (catalogo formativo)**:
+- Schema: `[Nome programma/catalogo] [anno]: [tema breve]` oppure `Docenza per [Programma]`
+- Esempi:
+  - *"WIFI 2026: storytelling e AI per il marketing"* (47 char)
+  - *"Catalogo Confartigianato: brand storyfication"* (47 char)
+  - *"INNESCO 2026: modelli narrativi per il brand"* (45 char)
+  - *"Innovation Academy: brand storyfication + AI"* (46 char)
+
+**PROFILO C (hub tech / TEDx / conferenze)**:
+- Schema: `Speaker proposal [Nome evento] [anno]` oppure `[Nome evento]: [angolo AI specifico]`
+- Esempi:
+  - *"Candidatura speaker TEDxTrento 2026"* (35 char)
+  - *"NOI Techpark: AI generativa per il marketing"* (45 char)
+  - *"SFScon: storytelling per AI generativa"* (39 char)
+
+### 18.4 Pattern vietati nell'oggetto
+
+- ⚠️ **Mai iniziare con `"Proposta di X"`** (76% delle mail vecchie, troppo predictable e sales-y). Sostituire con il nome del programma/venue come prima cosa, oppure con un verbo più diretto (`Candidatura per`, `Speaker per`, `Docenza per`, `Relatore ospite`).
+- ⚠️ **Niente em-dash `—`** nell'oggetto (§0.6 ban globale).
+- ⚠️ **Niente CAPS LOCK** su parole intere (es. *"PROPOSTA SPEAKER"* è banned). Solo prima maiuscola normale.
+- ⚠️ **Niente `!`** o `!!!` nell'oggetto.
+- ⚠️ **Max 1 buzzword tematica** (`storytelling` OPPURE `AI` OPPURE `marketing`, non sempre tutte e tre stack). Se citi il nome del programma, il buzzword scende a uno solo nel resto.
+- ⚠️ **Niente Re: / Fwd:** in prima mail (sono tecniche di click-bait riconoscibili).
+- ⚠️ **Anno SEMPRE incluso** quando l'edizione è annuale e l'anno è disponibile (`INNESCO 2026`, non `INNESCO`). Aiuta il destinatario a capire l'edizione di riferimento.
+
+### 18.5 Test finale prima di emettere
+1. L'oggetto contiene almeno il nome del programma o della venue?
+2. È sotto 65 caratteri?
+3. Non inizia con "Proposta di"?
+4. Non contiene em-dash?
+5. Non è una pila di buzzword senza specificità?
+
+Se uno solo fallisce, riscrivi.

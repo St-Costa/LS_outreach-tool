@@ -36,11 +36,14 @@ def email_drafting_guidelines() -> str:
         "soddisfare un'altra regola. Se una regola sembra chiedere specificità che\n"
         "la fonte non offre, vince §0.0 e ometti, non inventare.\n\n"
         "PROCEDURA OBBLIGATORIA:\n"
-        "  1. Scrivi una prima versione del body seguendo le sezioni 1-17.\n"
-        "  2. Esegui il SELF-CHECK §0.7, partendo dal punto 0 (anti-allucinazione).\n"
-        "  3. Applica la BLACKLIST §0.1-0.6.\n"
-        "  4. Riscrivi finché ogni voce di §0 è soddisfatta.\n"
-        "  5. Solo allora restituisci il JSON.\n"
+        "  1. Identifica il PROFILO VENUE (§0.8.0) prima di scrivere.\n"
+        "  2. Scrivi il SUBJECT seguendo §18 (pattern per profilo, 35-55 char, nome programma obbligatorio).\n"
+        "  3. Scrivi il body seguendo le sezioni 1-17 e §0.8 con vincoli del profilo.\n"
+        "  4. Esegui il SELF-CHECK §0.7, partendo dal punto 0 (anti-allucinazione).\n"
+        "  5. Applica la BLACKLIST §0.1-0.6 sul body E sul subject.\n"
+        "  6. Esegui il TEST FINALE OGGETTO §18.5.\n"
+        "  7. Riscrivi finché ogni voce di §0 e §18 è soddisfatta.\n"
+        "  8. Solo allora restituisci il JSON.\n"
         "Una sola violazione di §0.0 = output da scartare e riscrivere.\n\n"
         + text
     )
@@ -322,7 +325,7 @@ DRAFT_FIRST_EMAIL_TASK = """COMPITO: genera il draft di una nuova email/messaggi
 
 Output JSON con questo schema esatto:
 {
-  "subject": "oggetto della mail (vuoto se canale non email)",
+  "subject": "oggetto della mail SECONDO le regole §18 delle linee guida (35-55 char, hard cap 65; nome programma/venue OBBLIGATORIO; pattern per profilo §0.8.0; mai iniziare con 'Proposta di X'; niente em-dash; vuoto se canale non email)",
   "body": "corpo del messaggio, formattato con saluto, paragrafi, firma SECONDO le regole §5 delle linee guida (mai placeholder come [Speaker]: scrivere sempre 'Luca Nesler' oppure 'Luca Nesler\\nStefano Costa' a seconda del contenuto, seguito SEMPRE dal link https://www.lucanesler.com/brand-storyfication/)",
   "channel_suggestion": "email|li_dm|ig_dm|fb_dm|phone (canale consigliato per il primo contatto)",
   "speaker_choice": "Luca|Stefano|entrambi",

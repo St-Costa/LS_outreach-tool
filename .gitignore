@@ -1,0 +1,14 @@
+venv/
+.venv/
+__pycache__/
+*.pyc
+data/outreach.db
+data/outreach.db-journal
+data/outreach.db-wal
+data/outreach.db-shm
+data/backups/
+data/attachments/
+.streamlit/secrets.toml
+.streamlit/
+.DS_Store
+*.log

@@ -113,6 +113,7 @@ Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata
 
 ## Note operative per Claude
 
+- **Commit dopo ogni modifica**: al termine di ogni intervento (anche piccolo) fai un commit autonomamente, senza chiedere conferma. Messaggio in italiano, conciso, focalizzato sul "perché". Un commit per task logico — non accumulare modifiche scollegate. Mai `git push` senza richiesta esplicita.
 - **Prima di proporre modifiche allo schema**: leggere `docs/SCHEMA.md` per il contesto delle migrazioni legacy.
 - **Prima di toccare il flusso draft email**: capire il pattern `is_draft` (gotcha #5) e i blocchi context in `_build_draft_context_blocks` ([lib/claude.py:256](lib/claude.py#L256)).
 - **Per testare modifiche** che toccano DB: `python tests/test_importer.py` usa un DB temporaneo `/tmp/outreach_test.db`, non sporca il database reale.

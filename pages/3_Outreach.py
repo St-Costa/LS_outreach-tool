@@ -1,6 +1,7 @@
 """Outreach — chat per venue. Genera mail, incolla risposte, aggiorna stato."""
 from __future__ import annotations
 
+import subprocess
 from datetime import date, datetime
 
 import streamlit as st
@@ -77,6 +78,24 @@ def absolute_date(dt: datetime) -> str:
 st.set_page_config(page_title="Outreach", layout="wide")
 ui.apply_global_style()
 db.init_db()
+
+# Apertura allegato richiesta via query param: lo apriamo con l'app di sistema
+# (xdg-open) — il tool gira locale single-user, quindi il "server" è la macchina
+# dell'utente. Niente download del browser: l'app nativa visualizza il file.
+if "open_attachment" in st.query_params:
+    try:
+        _att_id = int(st.query_params["open_attachment"])
+        _att = db.get_attachment(_att_id)
+        if _att and _att.get("path"):
+            subprocess.Popen(
+                ["xdg-open", _att["path"]],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+    except Exception:
+        pass
+    del st.query_params["open_attachment"]
+    st.rerun()
 
 st.title("Outreach")
 
@@ -352,14 +371,17 @@ else:
         content = _escape(it.get("content") or "")
         side_class = "us" if is_us else "them"
 
-        # Chip allegati legati a questa interaction (icona + filename)
+        # Chip allegati legati a questa interaction (icona + filename).
+        # Click → query param open_attachment → xdg-open server-side (vedi top file).
         att_html = ""
         atts_for_it = interaction_atts.get(it["id"]) or []
         if atts_for_it:
             chips = "".join(
-                f'<span class="attachment-chip" title="{_escape(a.get("filename",""))}">'
+                f'<a class="attachment-chip" href="?open_attachment={a["id"]}" '
+                f'title="Apri {_escape(a.get("filename",""))}" '
+                f'onclick="event.stopPropagation();">'
                 f'{attachment_icon(a.get("mime"), a.get("filename"))} {_escape(a.get("filename",""))}'
-                f'</span>'
+                f'</a>'
                 for a in atts_for_it
             )
             att_html = f'<div class="attachments-strip">{chips}</div>'
@@ -448,6 +470,14 @@ else:
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+    color: inherit !important;
+    text-decoration: none !important;
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+.attachment-chip:hover {
+    background: rgba(255,255,255,0.20);
+    border-color: rgba(255,255,255,0.35);
 }
 @keyframes bubble-expand {
     from { opacity: 0; max-height: 0; transform: translateY(-4px); }
@@ -491,157 +521,13 @@ else:
         height=0,
     )
 
-    # Sotto la chat, accesso al draft originale LLM solo per le mail nostre che divergono
-    diverged = [
-        it for it in interactions
-        if it.get("direction") == "inviata"
-        and it.get("llm_draft")
-        and it.get("llm_draft") != it.get("content")
-    ]
-    if diverged:
-        with st.expander(f"Draft LLM originali (per {len(diverged)} mail modificate prima dell'invio)"):
-            for it in diverged:
-                st.markdown(f"**{it.get('subject') or '(senza oggetto)'}** — {it.get('occurred_at')}")
-                st.text(it["llm_draft"])
-                st.divider()
-
 st.divider()
 
-# ============== ALLEGATI ==============
-# Libreria allegati: upload chat-style + selezione multi per il prossimo draft.
-# Gli allegati selezionati vengono iniettati nel context LLM (tramite i loro
-# riassunti già cached in DB), e legati alla mail confermata via interaction_attachments.
+# Stato selezione allegati per la prossima mail (consumato sia dalla popover
+# sotto le azioni sia dal pannello draft attivo).
 sel_key = f"draft_attachment_ids_{venue['id']}"
 if sel_key not in st.session_state:
     st.session_state[sel_key] = []
-
-available_attachments = db.list_attachments(venue_id=venue["id"], include_shared=True)
-
-with st.expander(f"📎 Allegati ({len(st.session_state[sel_key])} selezionati / {len(available_attachments)} in libreria)", expanded=False):
-    # --- Upload nuovo file ---
-    uploader_key = f"att_uploader_v{venue['id']}_{st.session_state.get('att_uploader_version', 0)}"
-    uploaded = st.file_uploader(
-        "Allega un file alla conversazione (PDF, immagine, doc) — l'LLM lo leggerà una volta sola e ne caricherà il riassunto",
-        type=None,
-        accept_multiple_files=False,
-        key=uploader_key,
-    )
-    col_up_a, col_up_b = st.columns([1, 4])
-    share_globally = col_up_a.checkbox(
-        "Globale",
-        value=True,
-        help="Se selezionato, l'allegato è disponibile anche per altre venue. Se deselezionato, è legato solo a questa venue.",
-        key=f"att_share_v{venue['id']}",
-    )
-    if uploaded is not None:
-        with st.spinner(f"Salvataggio e analisi LLM di {uploaded.name}…"):
-            try:
-                rec = db.save_attachment(uploaded, venue_id=None if share_globally else venue["id"])
-                # Riassunto LLM one-shot (cached in DB → riusato in tutti i draft futuri)
-                try:
-                    summary = claude.summarize_attachment(rec["path"], rec["filename"], rec["mime"])
-                    db.update_attachment_summary(
-                        rec["id"],
-                        summary_json=summary,
-                        kind=summary.get("kind"),
-                    )
-                    st.success(
-                        f"{attachment_icon(rec['mime'], rec['filename'])} **{rec['filename']}** caricato e analizzato. "
-                        f"Tipo: *{summary.get('kind','-')}*. Selezionato per il prossimo draft."
-                    )
-                except Exception as e:
-                    st.warning(
-                        f"File salvato, ma analisi LLM fallita: {e}. "
-                        "Compila a mano il campo \"Note utente\" qui sotto se vuoi che la LLM ne tenga conto."
-                    )
-                # Auto-seleziona l'appena caricato
-                st.session_state[sel_key] = list(set(st.session_state[sel_key] + [rec["id"]]))
-                # Bump della versione per resettare il widget e permettere altro upload
-                st.session_state["att_uploader_version"] = st.session_state.get("att_uploader_version", 0) + 1
-                st.rerun()
-            except Exception as e:
-                st.error(f"Errore upload: {e}")
-
-    # --- Lista allegati disponibili ---
-    if not available_attachments:
-        st.caption("Nessun allegato in libreria. Carica il primo file qui sopra.")
-    else:
-        st.caption(
-            "Spunta gli allegati che vuoi includere nella prossima mail. La LLM riceverà il loro "
-            "riassunto come context (non il file intero) per decidere se menzionarli nel body."
-        )
-        for a in available_attachments:
-            cols = st.columns([0.55, 5, 1.4, 1.4])
-            checked = cols[0].checkbox(
-                " ",
-                value=a["id"] in st.session_state[sel_key],
-                key=f"att_pick_{venue['id']}_{a['id']}",
-                label_visibility="collapsed",
-            )
-            if checked and a["id"] not in st.session_state[sel_key]:
-                st.session_state[sel_key].append(a["id"])
-            elif not checked and a["id"] in st.session_state[sel_key]:
-                st.session_state[sel_key].remove(a["id"])
-
-            scope_label = "globale" if a.get("venue_id") is None else "venue"
-            summary = a.get("summary") or {}
-            title = summary.get("title") or a.get("filename")
-            cols[1].markdown(
-                f"**{attachment_icon(a.get('mime'), a.get('filename'))} {title}** "
-                f"<span style='opacity:0.6; font-size:0.85em;'>· {a.get('filename')} · "
-                f"{fmt_size(a.get('size'))} · {scope_label}</span>",
-                unsafe_allow_html=True,
-            )
-            if cols[2].button("Dettagli", key=f"att_details_{a['id']}", use_container_width=True):
-                st.session_state[f"att_open_{a['id']}"] = not st.session_state.get(f"att_open_{a['id']}", False)
-            if cols[3].button("🗑 Elimina", key=f"att_del_{a['id']}", use_container_width=True):
-                db.delete_attachment(a["id"])
-                if a["id"] in st.session_state[sel_key]:
-                    st.session_state[sel_key].remove(a["id"])
-                st.rerun()
-
-            if st.session_state.get(f"att_open_{a['id']}"):
-                with st.container(border=True):
-                    if summary:
-                        if summary.get("kind"):
-                            st.markdown(f"**Tipo:** {summary['kind']}")
-                        if summary.get("target_audience"):
-                            st.markdown(f"**Audience:** {summary['target_audience']}")
-                        if summary.get("duration_minutes"):
-                            st.markdown(f"**Durata:** ~{summary['duration_minutes']} min")
-                        if summary.get("key_topics"):
-                            st.markdown(f"**Topic:** {', '.join(summary['key_topics'])}")
-                        if summary.get("summary"):
-                            st.markdown(f"**Riassunto LLM:**\n\n{summary['summary']}")
-                        if summary.get("when_to_use"):
-                            st.markdown(f"**Quando usarlo:** {summary['when_to_use']}")
-                    else:
-                        st.caption("Nessun riassunto LLM (analisi non riuscita o formato non supportato nativamente).")
-
-                    new_manual = st.text_area(
-                        "Note utente (override / integrazione del riassunto, viene letta dalla LLM)",
-                        value=a.get("summary_manual") or "",
-                        key=f"att_manual_{a['id']}",
-                        height=80,
-                    )
-                    btn_cols = st.columns(2)
-                    if btn_cols[0].button("Salva note", key=f"att_save_manual_{a['id']}", use_container_width=True):
-                        db.update_attachment_summary(a["id"], summary_manual=new_manual)
-                        st.toast("Note salvate.")
-                        st.rerun()
-                    if btn_cols[1].button("🔄 Rigenera riassunto LLM", key=f"att_regen_{a['id']}", use_container_width=True):
-                        try:
-                            with st.spinner("Rigenerazione…"):
-                                new_summary = claude.summarize_attachment(
-                                    a["path"], a["filename"], a.get("mime")
-                                )
-                                db.update_attachment_summary(
-                                    a["id"], summary_json=new_summary, kind=new_summary.get("kind")
-                                )
-                                st.toast("Riassunto rigenerato.")
-                                st.rerun()
-                        except Exception as e:
-                            st.error(f"Errore: {e}")
 
 # ============== AZIONI ==============
 prior_outgoing = db.count_outgoing_for_venue(venue["id"])
@@ -720,17 +606,85 @@ with action_col2:
         st.session_state[f"paste_open_{venue['id']}"] = not paste_open
         st.rerun()
 
-with st.expander("🔍 Debug: ispeziona prompt LLM (solo prima mail)"):
+# --- Popover allegati per la prossima mail ---
+# Compatto, contestuale alla composizione (non più una "barra globale").
+# Permette upload + selezione di allegati che verranno legati alla mail in uscita.
+available_attachments = db.list_attachments(venue_id=venue["id"], include_shared=True)
+_n_sel = len(st.session_state[sel_key])
+_pop_label = (
+    f"📎 Allegati per la prossima mail ({_n_sel} selezionati)"
+    if _n_sel else "📎 Allegati per la prossima mail"
+)
+with st.popover(_pop_label, use_container_width=False):
     st.caption(
-        "Mostra il prompt che verrebbe inviato a Claude per generare la prima mail "
-        "(include venue + contatto + storico + Ente + sedi sorelle se presenti)."
+        "Carica/seleziona file da allegare al **prossimo messaggio in uscita**. "
+        "Verranno legati a quella specifica mail una volta confermata."
     )
-    if st.checkbox("Mostra prompt", key=f"show_prompt_{venue['id']}"):
-        try:
-            prompt_text = claude.build_draft_first_email_prompt(venue, contact_for_draft)
-            st.code(prompt_text, language="text")
-        except Exception as e:
-            st.error(f"Errore costruzione prompt: {e}")
+
+    uploader_key = f"att_uploader_v{venue['id']}_{st.session_state.get('att_uploader_version', 0)}"
+    uploaded = st.file_uploader(
+        "Allega un file (PDF, immagine, doc) — l'LLM ne caricherà una volta sola il riassunto",
+        type=None,
+        accept_multiple_files=False,
+        key=uploader_key,
+    )
+    share_globally = st.checkbox(
+        "Condividi globalmente (disponibile anche per altre venue)",
+        value=True,
+        key=f"att_share_v{venue['id']}",
+    )
+    if uploaded is not None:
+        with st.spinner(f"Salvataggio e analisi LLM di {uploaded.name}…"):
+            try:
+                rec = db.save_attachment(uploaded, venue_id=None if share_globally else venue["id"])
+                try:
+                    summary = claude.summarize_attachment(rec["path"], rec["filename"], rec["mime"])
+                    db.update_attachment_summary(
+                        rec["id"], summary_json=summary, kind=summary.get("kind"),
+                    )
+                    st.success(
+                        f"{attachment_icon(rec['mime'], rec['filename'])} **{rec['filename']}** caricato. "
+                        f"Tipo: *{summary.get('kind','-')}*. Selezionato per la prossima mail."
+                    )
+                except Exception as e:
+                    st.warning(f"File salvato, ma analisi LLM fallita: {e}.")
+                st.session_state[sel_key] = list(set(st.session_state[sel_key] + [rec["id"]]))
+                st.session_state["att_uploader_version"] = st.session_state.get("att_uploader_version", 0) + 1
+                st.rerun()
+            except Exception as e:
+                st.error(f"Errore upload: {e}")
+
+    if not available_attachments:
+        st.caption("Nessun allegato in libreria.")
+    else:
+        st.caption("Seleziona gli allegati da includere:")
+        for a in available_attachments:
+            cols = st.columns([0.55, 5, 1.2])
+            checked = cols[0].checkbox(
+                " ",
+                value=a["id"] in st.session_state[sel_key],
+                key=f"att_pick_{venue['id']}_{a['id']}",
+                label_visibility="collapsed",
+            )
+            if checked and a["id"] not in st.session_state[sel_key]:
+                st.session_state[sel_key].append(a["id"])
+            elif not checked and a["id"] in st.session_state[sel_key]:
+                st.session_state[sel_key].remove(a["id"])
+
+            scope_label = "globale" if a.get("venue_id") is None else "venue"
+            summary = a.get("summary") or {}
+            title = summary.get("title") or a.get("filename")
+            cols[1].markdown(
+                f"**{attachment_icon(a.get('mime'), a.get('filename'))} {title}** "
+                f"<span style='opacity:0.6; font-size:0.85em;'>· {a.get('filename')} · "
+                f"{fmt_size(a.get('size'))} · {scope_label}</span>",
+                unsafe_allow_html=True,
+            )
+            if cols[2].button("🗑", key=f"att_del_{a['id']}", use_container_width=True):
+                db.delete_attachment(a["id"])
+                if a["id"] in st.session_state[sel_key]:
+                    st.session_state[sel_key].remove(a["id"])
+                st.rerun()
 
 
 # ============== PASTE RISPOSTA (se aperto) ==============
@@ -883,7 +837,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
             st.markdown(f"**📎 Allegati in questa mail:** {chips_md}")
             st.caption(
                 "Quando confermi l'invio ti viene ricordato di allegarli su Aruba. "
-                "Modifica la selezione dalla sezione “Allegati” qui sopra."
+                "Modifica la selezione dalla popover **📎 Allegati** sotto i bottoni di azione."
             )
 
     save_cols = st.columns(2)

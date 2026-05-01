@@ -843,9 +843,9 @@ def discover_venues(scope: str, max_results: int = 8, on_progress=None) -> list[
     ])
     # Uso web_search_20250305 (senza dynamic filtering) — NON apre un code_execution sandbox
     # interno, quindi non c'è il bug del container_id pendente dopo pause_turn.
-    # max_uses scalato sul numero di venue richieste: ~15 search per venue (drill-down generale +
-    # identificazione referente + verifica email + social + deadline). Cap a 300 come ceiling assoluto.
-    estimated_searches = min(300, max(40, max_results * 15))
+    # max_uses scalato sul numero di venue richieste: ~8 search per venue (drill-down generale +
+    # identificazione referente + verifica email). Cap a 150 come ceiling assoluto.
+    estimated_searches = min(150, max(24, max_results * 8))
     tools = [{
         "type": "web_search_20250305",
         "name": "web_search",
@@ -870,7 +870,7 @@ def discover_venues(scope: str, max_results: int = 8, on_progress=None) -> list[
         _emit(f"Round {attempt + 1}/{max_continuations + 1} — LLM al lavoro...")
         with client.messages.stream(
             model=MODEL,
-            max_tokens=32000,
+            max_tokens=64000,
             system=system_blocks,
             messages=messages,
             tools=tools,

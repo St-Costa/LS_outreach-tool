@@ -1402,6 +1402,18 @@ def update_discovery_candidate_status(candidate_id: int, status: str) -> None:
         )
 
 
+def delete_discovery_candidates(candidate_ids: list[int]) -> int:
+    if not candidate_ids:
+        return 0
+    placeholders = ",".join("?" * len(candidate_ids))
+    with transaction() as conn:
+        cur = conn.execute(
+            f"DELETE FROM discovery_candidates WHERE id IN ({placeholders})",
+            tuple(candidate_ids),
+        )
+        return cur.rowcount or 0
+
+
 # ---------------- LLM call telemetry ----------------
 
 LLM_CALL_FIELDS = [

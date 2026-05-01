@@ -804,6 +804,40 @@ else:
                 st.session_state["last_bulk_ts"] = datetime.now().strftime("%Y-%m-%d_%H-%M")
             st.balloons()
 
+        # ----- Bulk delete (rimuove dal DB le venue selezionate) -----
+        # Conferma a 2 step via session_state per evitare cancellazioni accidentali.
+        confirm_key = f"confirm_del_{selected_run}"
+        st.caption(
+            "Oppure rimuovi definitivamente le venue selezionate dal DB "
+            "(non verranno contattate e non resteranno tra i candidati)."
+        )
+        if not st.session_state.get(confirm_key):
+            if st.button(
+                f"🗑️ Cancella dal DB {n_sel} venue selezionate" if n_sel else "Seleziona almeno una venue",
+                disabled=n_sel == 0,
+                use_container_width=True,
+                key=f"del_btn_{selected_run}",
+            ):
+                st.session_state[confirm_key] = True
+                st.rerun()
+        else:
+            st.warning(
+                f"Confermi la cancellazione definitiva di **{n_sel}** candidati? "
+                "L'operazione non è reversibile."
+            )
+            c1, c2 = st.columns(2)
+            if c1.button("✅ Sì, cancella", type="primary", use_container_width=True, key=f"del_yes_{selected_run}"):
+                ids = [c["id"] for c in selected_cands]
+                deleted = db.delete_discovery_candidates(ids)
+                for cid in ids:
+                    st.session_state.pop(f"sel_{cid}", None)
+                st.session_state.pop(confirm_key, None)
+                st.success(f"✓ Rimossi {deleted} candidati dal DB.")
+                st.rerun()
+            if c2.button("Annulla", use_container_width=True, key=f"del_no_{selected_run}"):
+                st.session_state.pop(confirm_key, None)
+                st.rerun()
+
 # ============== EXPORT MARKDOWN delle mail dell'ultimo bulk ==============
 last_run_id = st.session_state.get("last_bulk_run_id")
 if last_run_id:

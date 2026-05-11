@@ -13,7 +13,7 @@ from typing import Any, Optional
 
 import anthropic
 
-from . import db, prompts
+from . import db, pipeline, prompts
 
 MODEL = "claude-sonnet-4-6"
 MODEL_HAIKU = "claude-haiku-4-5-20251001"
@@ -586,14 +586,14 @@ def _build_draft_context_blocks(
     # Includerli farebbe credere all'LLM che la mail sia già stata inviata.
     same_venue_ints = [
         it for it in same_venue_ints
-        if not (it.get("direction") == "inviata" and it.get("is_draft"))
+        if not pipeline.is_pending_draft(it)
     ]
     cross_contact_ints: list[dict] = []
     if contact and contact.get("id"):
         cross_contact_ints = [
             it for it in db.get_interactions_for_contact(contact["id"], limit=30)
             if it.get("venue_id") != venue.get("id")  # solo cross-venue
-            and not (it.get("direction") == "inviata" and it.get("is_draft"))
+            and not pipeline.is_pending_draft(it)
         ]
     organizer, sibling_venues, sibling_ints = _organizer_context_for_venue(venue)
     blocks = [
@@ -668,7 +668,7 @@ def _organizer_context_for_venue(venue: dict) -> tuple[Optional[dict], list[dict
     for sv in siblings:
         sib_ints = [
             it for it in db.get_interactions_for_venue(sv["id"])
-            if not (it.get("direction") == "inviata" and it.get("is_draft"))
+            if not pipeline.is_pending_draft(it)
         ]
         sibling_ints.extend(sib_ints)
     return organizer, siblings, sibling_ints
@@ -1271,7 +1271,7 @@ def _build_venue_dossier(v: dict) -> str:
     # Escludi i draft non confermati: non sono mail effettivamente inviate.
     ints = [
         it for it in db.get_interactions_for_venue(v["id"])
-        if not (it.get("direction") == "inviata" and it.get("is_draft"))
+        if not pipeline.is_pending_draft(it)
     ]
     if not ints:
         return "\n".join(lines)
@@ -1676,7 +1676,7 @@ def _build_similar_history(venue: dict, max_similar: int = 3) -> list[dict]:
         sv = entry["venue"]
         ints = [
             it for it in db.list_interactions({"venue_id": sv["id"]}, limit=5)
-            if not (it.get("direction") == "inviata" and it.get("is_draft"))
+            if not pipeline.is_pending_draft(it)
         ]
         result.append({"venue": sv, "interactions": ints, "score": entry.get("score")})
     return result

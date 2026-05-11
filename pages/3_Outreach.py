@@ -372,7 +372,7 @@ def _rank_contacts_for_venue(cs: list[dict], current_venue_id: int) -> list[tupl
     ranked: list[tuple[dict, int, str]] = []
     for c in cs:
         ints = db.get_interactions_for_contact(c["id"], limit=50)
-        ints = [it for it in ints if not (it.get("direction") == "inviata" and it.get("is_draft"))]
+        ints = [it for it in ints if not pipeline.is_pending_draft(it)]
         cross = [it for it in ints if it.get("venue_id") != current_venue_id]
         same = [it for it in ints if it.get("venue_id") == current_venue_id]
         cross_received = [it for it in cross if it.get("direction") == "ricevuta"]
@@ -440,7 +440,7 @@ pending_drafts = [
 ]
 interactions = [
     it for it in all_interactions
-    if not (it.get("direction") == "inviata" and it.get("is_draft"))
+    if not pipeline.is_pending_draft(it)
 ]
 
 # Auto-idratazione del draft pending nel session_state (così il pannello editor lo prende)

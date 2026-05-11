@@ -63,7 +63,7 @@ discovery_runs ─< discovery_candidates
 settings (key/value: API key cifrata Fernet)
 ```
 
-Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata, rifiutata, ghostati`.
+Stati pipeline (riconfigurati vs spec a 8): `da_contattare, contattata, accettata, interessati_futuro, rifiutata, ghostati` (6 stati). Definiti in [lib/pipeline.py:11-18](lib/pipeline.py#L11-L18).
 
 ## Convenzioni codice
 
@@ -80,7 +80,7 @@ Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata
 
 1. **API key**: cifrata Fernet in tabella `settings`, master key in `~/.config/outreach/master.key` (perms 0o600). **NO `.env`, NO env var, NO `st.secrets`**. Vedi [lib/settings.py](lib/settings.py). Recovery se persa → vedi [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-2. **Pipeline a 5 stati** (non 8 come spec): `da_contattare, contattata, accettata, rifiutata, ghostati`. Stati legacy mappati automaticamente nella migrazione di `init_db()` ([lib/db.py:443-471](lib/db.py#L443-L471)) e in `pipeline.normalize_state()`.
+2. **Pipeline a 6 stati** (non 8 come spec): `da_contattare, contattata, accettata, interessati_futuro, rifiutata, ghostati`. Stati legacy mappati automaticamente nella migrazione di `init_db()` ([lib/db.py:443-471](lib/db.py#L443-L471)) e in `pipeline.normalize_state()`.
 
 3. **Modelli LLM e prompt caching**: due modelli affiancati.
    - `claude-sonnet-4-6` ([lib/claude.py:18](lib/claude.py#L18)) per draft/follow-up/analisi/discovery (default).
@@ -90,7 +90,7 @@ Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata
 
 4. **Discovery web search**: tool `web_search_20250305` (NON le versioni più nuove con `dynamic filtering` per evitare bug `container_id` su `pause_turn`). Loop `pause_turn` fino a 10 round, max 24k token per round, fino a 300 search totali. Vedi `discover_venues()` a partire da [lib/claude.py:1323](lib/claude.py#L1323) (loop pause_turn a [lib/claude.py:1427-1440](lib/claude.py#L1427-L1440)).
 
-5. **`is_draft` flag su `interactions`**: i draft pending non confermati vanno **esclusi** da: count outgoing, history nel context LLM, last_outgoing per follow-up. Pattern: `COALESCE(is_draft, 0) = 0` in SQL, filtro `not (it["direction"] == "inviata" and it["is_draft"])` in Python. Senza questo l'LLM crede che la mail sia stata inviata.
+5. **`is_draft` flag su `interactions`**: i draft pending non confermati vanno **esclusi** da: count outgoing, history nel context LLM, last_outgoing per follow-up. Pattern: `COALESCE(is_draft, 0) = 0` in SQL; in Python usare gli helper centralizzati `pipeline.is_pending_draft(it)` (per filtri di esclusione `if not …`) e `pipeline.is_confirmed_outgoing(it)` (per conteggi positivi). Senza questo l'LLM crede che la mail sia stata inviata.
 
 6. **Streamlit pages**: ordine numerico nei filename pilota la sidebar. `3_Outreach.py` è "hidden" via CSS in [lib/ui.py:41-44](lib/ui.py#L41-L44) — si apre solo settando `st.session_state["draft_venue_id"]` da `1_Venue.py`.
 

@@ -40,6 +40,26 @@ def normalize_state(state: str | None) -> str:
     return LEGACY_STATE_MAP.get(state, "da_contattare")
 
 
+def is_pending_draft(interaction: dict) -> bool:
+    """True se l'interazione è un draft in uscita NON ancora confermato dall'utente.
+
+    Invariante del gotcha "is_draft" (vedi CLAUDE.md): i draft non confermati hanno
+    direction='inviata' ma is_draft=1; vanno **esclusi** da count outgoing, history
+    fornita all'LLM, last_outgoing per follow-up. Usare nei filtri di esclusione
+    come `[it for it in ints if not pipeline.is_pending_draft(it)]`.
+    """
+    return interaction.get("direction") == "inviata" and bool(interaction.get("is_draft"))
+
+
+def is_confirmed_outgoing(interaction: dict) -> bool:
+    """True se l'interazione è una mail/DM in uscita confermata (non un draft pending).
+
+    Equivalente Python del filtro SQL `direction='inviata' AND COALESCE(is_draft,0)=0`.
+    Usare nei conteggi positivi ("quante mail abbiamo davvero inviato").
+    """
+    return interaction.get("direction") == "inviata" and not interaction.get("is_draft")
+
+
 CHANNELS: list[str] = [
     "email", "ig_dm", "li_dm", "fb_dm", "phone", "in_person", "altro",
 ]

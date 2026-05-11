@@ -89,15 +89,57 @@ def _render_graph() -> None:
 
     COL_VENUE = "#4F8BF9"          # blu
     COL_ORG = "#F39C12"            # arancio
-    COL_CONTACT_ORPHAN = "#27AE60" # verde (orfano)
+    COL_CONTACT_ORPHAN = "#27AE60" # verde (orfano: mostrato nel label del parent)
     COL_EDGE_FK = "#BDC3C7"        # grigio chiaro (FK venue→ente)
     COL_EDGE_CONTACT = "#7F8C8D"   # grigio scuro (contatto-ponte)
 
-    # Nodi venue
+    # Pre-classifica i contatti: parent ids "graph-visibili" per contatto
+    # → orfani (1 parent) entreranno nel label del parent; ponti (≥2) → edge label.
+    orphans_by_parent: dict[str, list[str]] = {}
+    bridge_contacts: list[tuple[str, list[str]]] = []  # (display_name, parents)
+    isolated_contacts: list[dict] = []  # contatti senza alcun link
+
+    for cid, info in contact_links.items():
+        c = info["contact"]
+        full_name = " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)"
+        parents: list[str] = []
+        for v in info["venues"]:
+            parents.append(f"v{v['id']}")
+        for o in info["organizers"]:
+            parents.append(f"e{o['id']}")
+        if not parents:
+            isolated_contacts.append(c)
+        elif len(parents) == 1:
+            orphans_by_parent.setdefault(parents[0], []).append(full_name)
+        else:
+            bridge_contacts.append((full_name, parents))
+
+    # Font config che abilita HTML in label (per il colore verde dei contatti orfani).
+    # multi='html' permette <b>; bold.color rende tutto il <b>...</b> verde.
+    NODE_FONT = {
+        "multi": "html",
+        "color": "#1F1F1F",
+        "size": 14,
+        "face": "Arial",
+        "bold": {"color": COL_CONTACT_ORPHAN, "size": 12, "vadjust": 0, "mod": "bold"},
+    }
+
+    def _label_with_orphans(base_name: str, parent_id: str) -> str:
+        orphs = orphans_by_parent.get(parent_id, [])
+        if not orphs:
+            return base_name
+        # Limita a 6 nomi per non saturare il nodo; resto come "+N altri"
+        shown = orphs[:6]
+        extra = len(orphs) - len(shown)
+        lines = [base_name] + [f"<b>{n}</b>" for n in shown]
+        if extra > 0:
+            lines.append(f"<b>+{extra} altri</b>")
+        return "\n".join(lines)
+
+    # Nodi venue (con eventuali orfani nel label)
     for v in venues:
         nid = f"v{v['id']}"
         seen_node_ids.add(nid)
-        meta = f"\n{v.get('city') or ''}".strip()
         title = f"Venue: {v['name']}"
         if v.get("city"):
             title += f"\n{v['city']}"
@@ -105,14 +147,15 @@ def _render_graph() -> None:
             title += f"\nStato: {pipeline.label(v['pipeline_status'], pipeline.PIPELINE_LABELS)}"
         nodes.append(Node(
             id=nid,
-            label=v["name"],
+            label=_label_with_orphans(v["name"], nid),
             color=COL_VENUE,
             shape="dot",
             size=18,
             title=title,
+            font=NODE_FONT,
         ))
 
-    # Nodi enti
+    # Nodi enti (con eventuali orfani nel label)
     for o in organizers:
         nid = f"e{o['id']}"
         seen_node_ids.add(nid)
@@ -123,11 +166,12 @@ def _render_graph() -> None:
             title += f"\n{o['hq_city']}"
         nodes.append(Node(
             id=nid,
-            label=o["name"],
+            label=_label_with_orphans(o["name"], nid),
             color=COL_ORG,
             shape="square",
             size=22,
             title=title,
+            font=NODE_FONT,
         ))
 
     # Archi venue↔ente (FK organizer_id)
@@ -140,61 +184,40 @@ def _render_graph() -> None:
                 dashes=True,
             ))
 
-    # Contatti: ponti (≥2 link) → edge etichettati; orfani (1 link) → nodo piccolo
-    for cid, info in contact_links.items():
-        c = info["contact"]
+    # Contatti-ponte (≥2 parents): edge etichettato col nome contatto tra ogni coppia
+    for full_name, parents in bridge_contacts:
+        # filtra parents non presenti (paranoia)
+        parents = [p for p in parents if p in seen_node_ids]
+        for a, b in combinations(parents, 2):
+            edges.append(Edge(
+                source=a,
+                target=b,
+                label=full_name,
+                color=COL_EDGE_CONTACT,
+            ))
+
+    # Contatti senza alcun link → nodi isolati piccoli (per renderli trovabili nel grafo)
+    for c in isolated_contacts:
+        cid = c["id"]
         full_name = " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)"
-        # Costruisci lista parent node ids effettivamente esistenti nel grafo
-        parents: list[str] = []
-        for v in info["venues"]:
-            if f"v{v['id']}" in seen_node_ids:
-                parents.append(f"v{v['id']}")
-        for o in info["organizers"]:
-            if f"e{o['id']}" in seen_node_ids:
-                parents.append(f"e{o['id']}")
-        if not parents:
-            # contatto senza alcun link → lo mostriamo comunque come nodo isolato per renderlo trovabile
-            nid = f"c{cid}"
-            nodes.append(Node(
-                id=nid,
-                label=full_name,
-                color=COL_CONTACT_ORPHAN,
-                shape="dot",
-                size=8,
-                title=f"Contatto: {full_name}" + (f"\n{c.get('email')}" if c.get("email") else ""),
-            ))
-            continue
-        if len(parents) == 1:
-            # orfano: nodo piccolo attaccato al parent
-            nid = f"c{cid}"
-            nodes.append(Node(
-                id=nid,
-                label=full_name,
-                color=COL_CONTACT_ORPHAN,
-                shape="dot",
-                size=8,
-                title=f"Contatto: {full_name}" + (f"\n{c.get('email')}" if c.get("email") else ""),
-            ))
-            edges.append(Edge(source=parents[0], target=nid, color=COL_CONTACT_ORPHAN))
-        else:
-            # ponte: edge etichettato tra ogni coppia di parents
-            for a, b in combinations(parents, 2):
-                edges.append(Edge(
-                    source=a,
-                    target=b,
-                    label=full_name,
-                    color=COL_EDGE_CONTACT,
-                    # node id codificato per gestire il click su edge se serve in futuro
-                ))
+        nodes.append(Node(
+            id=f"c{cid}",
+            label=full_name,
+            color=COL_CONTACT_ORPHAN,
+            shape="dot",
+            size=8,
+            title=f"Contatto isolato: {full_name}" + (f"\n{c.get('email')}" if c.get("email") else ""),
+        ))
 
     # Legenda compatta
     st.markdown(
         f"""<div style="margin: 0 0 8px 0; font-size: 13px;">
         <span style="color:{COL_VENUE};">●</span> Venue &nbsp;
         <span style="color:{COL_ORG};">■</span> Ente &nbsp;
-        <span style="color:{COL_CONTACT_ORPHAN};">●</span> Contatto (orfano) &nbsp;
+        <span style="color:{COL_CONTACT_ORPHAN};">●</span> <span style="color:{COL_CONTACT_ORPHAN};">Contatto orfano</span> (nel nodo del parent) &nbsp;
         <span style="color:{COL_EDGE_CONTACT};">━</span> Contatto-ponte (etichetta sull'arco) &nbsp;
-        <span style="color:{COL_EDGE_FK};">┄</span> Venue→Ente
+        <span style="color:{COL_EDGE_FK};">┄</span> Venue→Ente &nbsp;·&nbsp;
+        <em>click su un nodo per aprire la sua pagina</em>
         </div>""",
         unsafe_allow_html=True,
     )

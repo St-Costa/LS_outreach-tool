@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import subprocess
+import time
 from datetime import date, datetime
 
 import streamlit as st
@@ -675,6 +676,155 @@ with action_col3:
     if st.button("Incolla risposta", key="btn_paste_response", use_container_width=True):
         st.session_state[f"paste_open_{venue['id']}"] = not paste_open
         st.rerun()
+
+
+# ============== ANALISI APPROCCIO (web search) ==============
+# Solo se abbiamo almeno una mail uscente: prima del primo invio non c'è nulla da analizzare.
+if prior_outgoing > 0:
+    analysis_key = f"outreach_analysis_{venue['id']}"
+    if st.button(
+        "🔍 Analizza contatto e approccio (web search)",
+        key="btn_analyze_outreach",
+        use_container_width=True,
+        help=(
+            "L'LLM cerca online se il contatto usato è davvero il referente migliore, "
+            "e suggerisce se fare follow-up, cambiare contatto o marcare come rifiutata. "
+            "L'analisi viene salvata nelle note della venue."
+        ),
+    ):
+        # Risolvi il contatto effettivamente usato per l'outreach: quello legato all'ultima
+        # mail uscente. Se la mail era stata mandata a indirizzo generico, last_outgoing
+        # ha contact_id=NULL → passiamo None all'LLM.
+        contacted_id = (last_outgoing or {}).get("contact_id")
+        contacted = db.get_contact(contacted_id) if contacted_id else None
+
+        # Giorni dall'ultima uscente (stesso pattern del bottone Crea follow-up)
+        days_since_out = 0
+        if last_outgoing:
+            try:
+                occurred = last_outgoing.get("occurred_at")
+                if isinstance(occurred, str):
+                    occurred = datetime.fromisoformat(occurred)
+                days_since_out = (datetime.now() - occurred).days if occurred else 0
+            except Exception:
+                days_since_out = 0
+
+        run_id = datetime.now().strftime("%Y-%m-%d %H:%M")
+        start_ts = time.time()
+        with st.status(f"🔍 Analisi outreach — {run_id} (0s)", expanded=True) as status_box:
+            def on_progress(msg: str):
+                elapsed = int(time.time() - start_ts)
+                mm, ss = divmod(elapsed, 60)
+                time_str = f"{mm}m {ss:02d}s" if mm else f"{ss}s"
+                status_box.update(label=f"🔍 Analisi outreach — {run_id} ({time_str})")
+                st.write(f"`[{time_str}]` {msg}")
+
+            try:
+                result = claude.analyze_outreach_approach(
+                    venue=venue,
+                    current_contact=contacted,
+                    venue_contacts=contacts,
+                    interactions=interactions,
+                    days_since_last_outgoing=days_since_out,
+                    on_progress=on_progress,
+                )
+                # Persisti subito nelle note venue, con marker timestampato.
+                summary_text = (result.get("summary") or "").strip()
+                if summary_text:
+                    marker = f"[Analisi outreach {run_id}]"
+                    existing_notes = (venue.get("notes") or "").rstrip()
+                    new_notes = (
+                        f"{existing_notes}\n\n{marker}\n{summary_text}"
+                        if existing_notes else f"{marker}\n{summary_text}"
+                    )
+                    db.update_venue(venue["id"], {"notes": new_notes})
+                st.session_state[analysis_key] = {"run_id": run_id, "result": result}
+                elapsed = int(time.time() - start_ts)
+                mm, ss = divmod(elapsed, 60)
+                time_str = f"{mm}m {ss:02d}s" if mm else f"{ss}s"
+                status_box.update(
+                    label=f"✓ Analisi completata in {time_str}", state="complete",
+                )
+                st.rerun()
+            except Exception as e:
+                elapsed = int(time.time() - start_ts)
+                status_box.update(label=f"✗ Errore dopo {elapsed}s: {e}", state="error")
+                st.error(f"Errore: {e}")
+
+    # Render del risultato salvato in session_state (sopravvive ai rerun, finché non si chiude)
+    saved = st.session_state.get(analysis_key)
+    if saved:
+        st.divider()
+        result = saved["result"]
+        head_col1, head_col2 = st.columns([5, 1])
+        head_col1.subheader(f"🔍 Analisi outreach del {saved['run_id']}")
+        if head_col2.button("Chiudi", key=f"close_analysis_{venue['id']}", use_container_width=True):
+            st.session_state.pop(analysis_key, None)
+            st.rerun()
+
+        # 1. Contatto attuale: ok o no?
+        is_best = bool(result.get("is_current_contact_best"))
+        if is_best:
+            st.success("✓ Il contatto attualmente usato è il referente giusto.")
+        else:
+            st.warning("⚠ Il contatto attualmente usato NON è il migliore.")
+        if result.get("current_contact_assessment"):
+            st.markdown(f"**Valutazione contatto attuale:** {result['current_contact_assessment']}")
+
+        # 2. Contatto migliore (se trovato)
+        bc = result.get("better_contact") or {}
+        if bc.get("name") or bc.get("email") or bc.get("role"):
+            with st.container(border=True):
+                st.markdown("**👤 Contatto suggerito alternativo:**")
+                rows = []
+                if bc.get("name"): rows.append(f"- **Nome:** {bc['name']}")
+                if bc.get("role"): rows.append(f"- **Ruolo:** {bc['role']}")
+                if bc.get("email"):
+                    conf = bc.get("email_confidence") or ""
+                    conf_label = f" _(confidenza: {conf})_" if conf else ""
+                    rows.append(f"- **Email:** `{bc['email']}`{conf_label}")
+                if bc.get("phone"): rows.append(f"- **Telefono:** {bc['phone']}")
+                if bc.get("source_url"):
+                    rows.append(f"- **Fonte:** [{bc['source_url']}]({bc['source_url']})")
+                if bc.get("rationale"): rows.append(f"- **Motivazione:** {bc['rationale']}")
+                st.markdown("\n".join(rows))
+
+        # 3. Prossima azione consigliata
+        action = result.get("next_action") or "follow_up"
+        action_labels = {
+            "follow_up": "📨 Fare follow-up",
+            "switch_contact": "🔄 Cambiare contatto",
+            "mark_rejected": "🚫 Marcare come rifiutata",
+            "wait": "⏳ Aspettare",
+        }
+        st.markdown(f"### Prossima azione: {action_labels.get(action, action)}")
+
+        if action == "mark_rejected":
+            if result.get("rejection_reasoning"):
+                st.markdown(f"**Perché:** {result['rejection_reasoning']}")
+            if st.button(
+                "Imposta venue come «Rifiutata»",
+                key=f"btn_set_rejected_{venue['id']}",
+                type="primary",
+            ):
+                db.update_venue(venue["id"], {"pipeline_status": "rifiutata"})
+                st.session_state.pop(analysis_key, None)
+                st.rerun()
+
+        elif action in ("follow_up", "wait"):
+            plan = result.get("follow_up_plan") or {}
+            if plan.get("rationale"):
+                st.markdown(f"**Motivazione:** {plan['rationale']}")
+            cols_info = st.columns(3)
+            cols_info[0].metric("Tempistica", f"{plan.get('timing_days', '?')}g da oggi")
+            cols_info[1].metric("Tono", plan.get("tone") or "—")
+            cols_info[2].metric("Inviare?", "sì" if plan.get("should_send") else "no")
+            if plan.get("subject_hint"):
+                st.markdown(f"**Suggerimento oggetto:** «{plan['subject_hint']}»")
+            if plan.get("body_hint"):
+                st.markdown(f"**Angolo / elemento nuovo:**\n\n> {plan['body_hint']}")
+
+    st.divider()
 
 
 # ============== PASTE RISPOSTA (se aperto) ==============

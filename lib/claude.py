@@ -360,6 +360,53 @@ SUGGEST_CHANNEL_SCHEMA = {
 }
 
 
+ANALYZE_OUTREACH_APPROACH_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "is_current_contact_best": {"type": "boolean"},
+        "current_contact_assessment": {"type": "string"},
+        "better_contact": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string"},
+                "role": {"type": "string"},
+                "email": {"type": "string"},
+                "phone": {"type": "string"},
+                "source_url": {"type": "string"},
+                "email_confidence": {"type": "string", "enum": ["alta", "media", "bassa", ""]},
+                "rationale": {"type": "string"},
+            },
+            "required": ["name", "role", "email", "phone", "source_url", "email_confidence", "rationale"],
+            "additionalProperties": False,
+        },
+        "next_action": {
+            "type": "string",
+            "enum": ["follow_up", "switch_contact", "mark_rejected", "wait"],
+        },
+        "follow_up_plan": {
+            "type": "object",
+            "properties": {
+                "should_send": {"type": "boolean"},
+                "timing_days": {"type": "integer"},
+                "tone": {"type": "string"},
+                "subject_hint": {"type": "string"},
+                "body_hint": {"type": "string"},
+                "rationale": {"type": "string"},
+            },
+            "required": ["should_send", "timing_days", "tone", "subject_hint", "body_hint", "rationale"],
+            "additionalProperties": False,
+        },
+        "rejection_reasoning": {"type": "string"},
+        "summary": {"type": "string"},
+    },
+    "required": [
+        "is_current_contact_best", "current_contact_assessment", "better_contact",
+        "next_action", "follow_up_plan", "rejection_reasoning", "summary",
+    ],
+    "additionalProperties": False,
+}
+
+
 # ----- Core call helpers -----
 
 def _build_system_blocks(
@@ -733,6 +780,207 @@ def analyze_response(venue: dict, response_text: str, history: list[dict]) -> di
         task="analyze_response",
         model=MODEL_BY_TASK["analyze_response"],
     )
+
+
+def analyze_outreach_approach(
+    venue: dict,
+    current_contact: Optional[dict],
+    venue_contacts: list[dict],
+    interactions: list[dict],
+    days_since_last_outgoing: int,
+    on_progress=None,
+) -> dict:
+    """Analisi web-search di outreach in corso: il contatto è il migliore? cosa fare adesso?
+
+    Esegue una deep search (web_search_20250305) per verificare il referente attuale e
+    suggerire next action (follow_up, switch_contact, mark_rejected, wait) + un piano di
+    follow-up con hint per il prossimo draft. Loop pause_turn fino a 4 round, max 25 search.
+
+    `current_contact`: il contatto usato nelle mail già inviate (o quello consigliato se
+    non c'è ancora storia). Può essere None se le mail sono state mandate a indirizzo generico.
+    `interactions`: tutte le interazioni della venue (già filtrate dai draft non confermati).
+    """
+    speakers, profile = _ctx()
+
+    # Costruzione context: venue + ente + sorelle + contatto attuale + altri contatti + storico
+    organizer, sibling_venues, sibling_ints = _organizer_context_for_venue(venue)
+    parts = [
+        prompts.venue_block(venue),
+    ]
+    org_block = prompts.organizer_block(organizer, n_related_venues=len(sibling_venues) + (1 if organizer else 0))
+    if org_block:
+        parts.append(org_block)
+    siblings_block = prompts.same_organizer_venues_block(organizer, sibling_venues, sibling_ints)
+    if siblings_block:
+        parts.append(siblings_block)
+
+    # Contatto attualmente usato (evidenziato)
+    if current_contact:
+        cc_name = " ".join(filter(None, [current_contact.get("first_name"), current_contact.get("last_name")])).strip() or "(senza nome)"
+        cc_lines = [f"=== CONTATTO ATTUALMENTE USATO PER L'OUTREACH ==="]
+        cc_lines.append(f"Nome: {cc_name}")
+        for k in ("role", "email", "phone", "social_linkedin"):
+            v = current_contact.get(k)
+            if v:
+                cc_lines.append(f"{k}: {v}")
+        if current_contact.get("notes"):
+            cc_lines.append(f"Note: {current_contact['notes']}")
+        parts.append("\n".join(cc_lines))
+    else:
+        parts.append(
+            "=== CONTATTO ATTUALMENTE USATO PER L'OUTREACH ===\n"
+            "(nessun contatto specifico — le mail sono state inviate all'indirizzo generico della venue)"
+        )
+
+    # Altri contatti noti per questa venue (escludendo l'attuale)
+    other_contacts = [
+        c for c in venue_contacts
+        if not current_contact or c.get("id") != current_contact.get("id")
+    ]
+    if other_contacts:
+        oc_lines = ["=== ALTRI CONTATTI GIÀ NOTI PER QUESTA VENUE ==="]
+        for c in other_contacts:
+            nm = " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)"
+            extras = []
+            if c.get("role"):
+                extras.append(c["role"])
+            if c.get("email"):
+                extras.append(c["email"])
+            oc_lines.append(f"- {nm}" + (f" — {' · '.join(extras)}" if extras else ""))
+        parts.append("\n".join(oc_lines))
+
+    # Storico completo della venue (timeline cronologica con date)
+    if interactions:
+        h_lines = ["=== STORICO INTERAZIONI VENUE (cronologico, dal più vecchio) ==="]
+        for it in interactions:
+            occurred = str(it.get("occurred_at") or "")[:10]
+            arrow = "→ nostra" if it.get("direction") == "inviata" else "← loro"
+            subj = (it.get("subject") or "").strip()
+            body = (it.get("content") or "").strip().replace("\n", " ")
+            h_lines.append(
+                f"\n[{occurred}] {arrow} ({it.get('type', '')}) "
+                f"{('«' + subj[:100] + '» ') if subj else ''}"
+            )
+            if body:
+                h_lines.append(f"  {body[:800]}")
+        parts.append("\n".join(h_lines))
+    else:
+        parts.append("=== STORICO INTERAZIONI VENUE ===\n(nessuna interazione registrata)")
+
+    parts.append(f"=== TEMPO TRASCORSO ===\nGiorni dall'ultima mail uscente: {days_since_last_outgoing}")
+    parts.append(prompts.ANALYZE_OUTREACH_APPROACH_TASK)
+
+    user_text = "\n\n".join(parts)
+
+    tools = [{
+        "type": "web_search_20250305",
+        "name": "web_search",
+        "max_uses": 25,
+    }]
+    system_blocks = _build_system_blocks(speakers, profile)
+
+    client = _client()
+    messages: list[dict] = [{"role": "user", "content": user_text}]
+    final_response = None
+    max_continuations = 4
+
+    started_at = time.monotonic()
+    cumulative_usage = {"input_tokens": 0, "output_tokens": 0, "cache_read_tokens": 0, "cache_creation_tokens": 0}
+
+    def _emit(msg: str) -> None:
+        if on_progress:
+            on_progress(msg)
+
+    for attempt in range(max_continuations + 1):
+        _emit(f"Round {attempt + 1}/{max_continuations + 1} — LLM al lavoro...")
+        with client.messages.stream(
+            model=MODEL,
+            max_tokens=16000,
+            system=system_blocks,
+            messages=messages,
+            tools=tools,
+            thinking={"type": "adaptive"},
+            output_config={
+                "effort": "medium",
+                "format": {"type": "json_schema", "schema": ANALYZE_OUTREACH_APPROACH_SCHEMA},
+            },
+        ) as stream:
+            announced_thinking = False
+            announced_output = False
+            for event in stream:
+                etype = getattr(event, "type", None)
+                if etype == "content_block_start":
+                    block = getattr(event, "content_block", None)
+                    btype = getattr(block, "type", None)
+                    if btype == "server_tool_use":
+                        bname = getattr(block, "name", "")
+                        if bname == "web_search":
+                            _emit("🔎 Avvio ricerca web…")
+                    elif btype == "thinking" and not announced_thinking:
+                        _emit("💭 Sto ragionando sui risultati…")
+                        announced_thinking = True
+                    elif btype == "text" and not announced_output:
+                        _emit("📝 Sto scrivendo l'analisi…")
+                        announced_output = True
+                elif etype == "content_block_stop":
+                    snapshot = getattr(stream, "current_message_snapshot", None)
+                    if snapshot and getattr(snapshot, "content", None):
+                        last = snapshot.content[-1]
+                        ltype = getattr(last, "type", None)
+                        if ltype == "server_tool_use" and getattr(last, "name", "") == "web_search":
+                            inp = getattr(last, "input", {}) or {}
+                            query = inp.get("query") if isinstance(inp, dict) else None
+                            if query:
+                                _emit(f"🔎 Query: «{query}»")
+                        elif ltype == "web_search_tool_result":
+                            content = getattr(last, "content", []) or []
+                            n = len(content) if hasattr(content, "__len__") else 0
+                            _emit(f"📊 Risultati ricevuti ({n} link)")
+                            announced_thinking = False
+                elif etype == "message_delta":
+                    delta = getattr(event, "delta", None)
+                    stop_reason = getattr(delta, "stop_reason", None) if delta else None
+                    if stop_reason == "pause_turn":
+                        _emit("⏸️ Riprendo automaticamente…")
+            response = stream.get_final_message()
+
+        round_usage = _extract_usage(response)
+        for k in cumulative_usage:
+            cumulative_usage[k] += round_usage.get(k, 0)
+        final_response = response
+        sr = response.stop_reason
+        if sr == "pause_turn":
+            messages.append({"role": "assistant", "content": response.content})
+            continue
+        _emit(f"✓ Stop reason: {sr}")
+        break
+
+    duration_ms = int((time.monotonic() - started_at) * 1000)
+    meta = {"venue_id": venue.get("id")}
+
+    if final_response is None:
+        _log_llm_call("analyze_outreach_approach", MODEL, cumulative_usage, duration_ms,
+                      error="no response", meta=meta)
+        raise RuntimeError("Analisi outreach: nessuna risposta dal modello.")
+
+    text = "".join(b.text for b in final_response.content if getattr(b, "type", None) == "text")
+    if not text.strip():
+        _log_llm_call("analyze_outreach_approach", MODEL, cumulative_usage, duration_ms,
+                      error="empty response", meta=meta)
+        raise RuntimeError("Analisi outreach: risposta vuota.")
+    try:
+        result = json.loads(text)
+    except json.JSONDecodeError:
+        start, end = text.find("{"), text.rfind("}")
+        if start >= 0 and end > start:
+            result = json.loads(text[start:end + 1])
+        else:
+            _log_llm_call("analyze_outreach_approach", MODEL, cumulative_usage, duration_ms,
+                          error="json parse failed", meta=meta)
+            raise RuntimeError(f"Analisi outreach: JSON non parsabile.\n{text[:500]}")
+
+    _log_llm_call("analyze_outreach_approach", MODEL, cumulative_usage, duration_ms, meta=meta)
+    return result
 
 
 def _build_venue_dossier(v: dict) -> str:

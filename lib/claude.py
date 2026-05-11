@@ -1330,16 +1330,20 @@ def discover_venues(scope: str, max_results: int = 8, on_progress=None) -> list[
     mostrare i log step in UI.
     """
     speakers, profile = _ctx()
-    existing_venues = db.list_venues()
+    # Cap a 120 venue (le più recenti) per non caricare l'intero DB in memoria
+    # quando il numero di venue cresce. Il totale lo prendiamo separatamente per
+    # mostrarlo nel prompt all'LLM.
+    existing_venues = db.list_venues(limit=120)
+    total_venues = sum(db.count_venues_by_status().values())
 
     # Costruisci dossier per ogni venue: profilo completo + thread di proposte + esiti.
     # L'LLM legge i raw scambi e deduce da sé l'andazzo (accettato facile, scambio lungo, ghosting).
-    dossier_blocks = [_build_venue_dossier(v) for v in existing_venues[:120]]
+    dossier_blocks = [_build_venue_dossier(v) for v in existing_venues]
     existing_summary = "\n\n".join(dossier_blocks)
 
     task = prompts.DISCOVER_VENUES_TASK.format(scope=scope, max_results=max_results)
     user_text = "\n\n".join([
-        f"=== VENUE GIÀ NOTE ({len(existing_venues)} totali, mostrate prime 120) ===\n"
+        f"=== VENUE GIÀ NOTE ({total_venues} totali, mostrate prime {len(existing_venues)}) ===\n"
         "Per OGNUNA leggi: profilo + thread di proposte già fatte. Per ogni thread vedrai "
         "la mail iniziale, eventuali follow-up nostri e risposte loro. **Deduci da te** "
         "l'andazzo: accettazione facile, scambio prolungato, ghosting, rifiuto. Usalo come "

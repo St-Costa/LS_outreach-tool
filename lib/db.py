@@ -579,8 +579,8 @@ def get_venue_by_name(name: str) -> Optional[dict]:
         return row_to_dict(row)
 
 
-def list_venues(filters: Optional[dict] = None) -> list[dict]:
-    """Lista venue con filtri opzionali: type, region, pipeline_status, language, angle, city, organizer_id, orphan, search (LIKE su name/notes/email)."""
+def list_venues(filters: Optional[dict] = None, limit: Optional[int] = None) -> list[dict]:
+    """Lista venue con filtri opzionali: type, region, pipeline_status, language, angle, city, organizer_id, orphan, search (LIKE su name/notes/email). `limit` opzionale cappa le righe restituite (ordinamento per created_at DESC)."""
     filters = filters or {}
     where = []
     params: list[Any] = []
@@ -598,6 +598,9 @@ def list_venues(filters: Optional[dict] = None) -> list[dict]:
     if where:
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY created_at DESC"
+    if limit is not None and limit > 0:
+        sql += " LIMIT ?"
+        params.append(int(limit))
     with transaction() as conn:
         return rows_to_dicts(conn.execute(sql, params).fetchall())
 

@@ -124,6 +124,87 @@ def _render_graph() -> None:
         "bold": {"color": COL_CONTACT_ORPHAN, "size": 12, "vadjust": 0, "mod": "bold"},
     }
 
+    # ---------- LAYOUT DETERMINISTICO ----------
+    # Strategia: enti ordinati per #venue desc, righe da N enti. Sotto ogni ente,
+    # le sue venue in mini-griglia. Venue senza ente in fondo, contatti isolati ancora più sotto.
+    # Disattivo la fisica → posizioni esplicite, drag manuale possibile.
+    ENTI_PER_RIGA = 5
+    COL_W = 320            # passo orizzontale tra enti
+    VENUE_GRID_COLS = 3    # quante venue per riga sotto un ente
+    VENUE_SP_X = 90
+    VENUE_SP_Y = 70
+    VENUE_Y_OFFSET = 110   # distanza verticale ente → prima riga venue
+    ROW_BUFFER = 80        # margine in fondo a ogni riga di enti
+    ORPHAN_VENUE_COLS = 6  # venue senza ente: griglia X colonne
+    ORPHAN_VENUE_SP_X = 220
+    ORPHAN_VENUE_SP_Y = 90
+    ISOLATED_CONT_COLS = 10
+    ISOLATED_CONT_SP_X = 130
+
+    # Venue raggruppate per ente
+    venues_by_org_id: dict[int, list[dict]] = {o["id"]: [] for o in organizers}
+    orphan_venues: list[dict] = []
+    for v in venues:
+        oid = v.get("organizer_id")
+        if oid in venues_by_org_id:
+            venues_by_org_id[oid].append(v)
+        else:
+            orphan_venues.append(v)
+
+    # Ordina enti per #venue desc, poi per nome (stabile)
+    orgs_sorted = sorted(
+        organizers,
+        key=lambda o: (-len(venues_by_org_id.get(o["id"], [])), (o.get("name") or "").lower()),
+    )
+
+    org_pos: dict[int, tuple[float, float]] = {}
+    venue_pos: dict[int, tuple[float, float]] = {}
+
+    y_cursor = 0.0
+    n_rows = (len(orgs_sorted) + ENTI_PER_RIGA - 1) // ENTI_PER_RIGA
+    for r in range(n_rows):
+        row_orgs = orgs_sorted[r * ENTI_PER_RIGA : (r + 1) * ENTI_PER_RIGA]
+        # Altezza riga = quanta verticalità servono le venue del più "ricco" della riga
+        max_v = max((len(venues_by_org_id.get(o["id"], [])) for o in row_orgs), default=0)
+        n_venue_rows = (max_v + VENUE_GRID_COLS - 1) // VENUE_GRID_COLS if max_v else 0
+        row_height = VENUE_Y_OFFSET + n_venue_rows * VENUE_SP_Y + ROW_BUFFER
+        for c, o in enumerate(row_orgs):
+            x_org = c * COL_W
+            y_org = y_cursor
+            org_pos[o["id"]] = (x_org, y_org)
+            its_venues = venues_by_org_id.get(o["id"], [])
+            # Ordina venue del singolo ente per nome (stabilità visiva)
+            its_venues = sorted(its_venues, key=lambda v: (v.get("name") or "").lower())
+            for vi, v in enumerate(its_venues):
+                vrow = vi // VENUE_GRID_COLS
+                vcol = vi % VENUE_GRID_COLS
+                # Centra la mini-griglia sotto l'ente
+                vx = x_org + (vcol - (VENUE_GRID_COLS - 1) / 2) * VENUE_SP_X
+                vy = y_org + VENUE_Y_OFFSET + vrow * VENUE_SP_Y
+                venue_pos[v["id"]] = (vx, vy)
+        y_cursor += row_height
+
+    # Venue senza ente: griglia in fondo
+    if orphan_venues:
+        orphan_venues_sorted = sorted(orphan_venues, key=lambda v: (v.get("name") or "").lower())
+        for i, v in enumerate(orphan_venues_sorted):
+            ocol = i % ORPHAN_VENUE_COLS
+            orow = i // ORPHAN_VENUE_COLS
+            vx = ocol * ORPHAN_VENUE_SP_X
+            vy = y_cursor + orow * ORPHAN_VENUE_SP_Y
+            venue_pos[v["id"]] = (vx, vy)
+        n_orow = (len(orphan_venues_sorted) + ORPHAN_VENUE_COLS - 1) // ORPHAN_VENUE_COLS
+        y_cursor += n_orow * ORPHAN_VENUE_SP_Y + ROW_BUFFER
+
+    # Contatti isolati: griglia ancora più in fondo
+    isolated_pos: dict[int, tuple[float, float]] = {}
+    for i, c in enumerate(isolated_contacts):
+        col = i % ISOLATED_CONT_COLS
+        row = i // ISOLATED_CONT_COLS
+        cx = col * ISOLATED_CONT_SP_X
+        cy = y_cursor + row * 60
+        isolated_pos[c["id"]] = (cx, cy)
+
     def _label_with_orphans(base_name: str, parent_id: str) -> str:
         orphs = orphans_by_parent.get(parent_id, [])
         if not orphs:
@@ -136,7 +217,7 @@ def _render_graph() -> None:
             lines.append(f"<b>+{extra} altri</b>")
         return "\n".join(lines)
 
-    # Nodi venue (con eventuali orfani nel label)
+    # Nodi venue (con eventuali orfani nel label, posizione esplicita)
     for v in venues:
         nid = f"v{v['id']}"
         seen_node_ids.add(nid)
@@ -145,6 +226,7 @@ def _render_graph() -> None:
             title += f"\n{v['city']}"
         if v.get("pipeline_status"):
             title += f"\nStato: {pipeline.label(v['pipeline_status'], pipeline.PIPELINE_LABELS)}"
+        vx, vy = venue_pos.get(v["id"], (0.0, 0.0))
         nodes.append(Node(
             id=nid,
             label=_label_with_orphans(v["name"], nid),
@@ -153,9 +235,11 @@ def _render_graph() -> None:
             size=18,
             title=title,
             font=NODE_FONT,
+            x=vx,
+            y=vy,
         ))
 
-    # Nodi enti (con eventuali orfani nel label)
+    # Nodi enti (con eventuali orfani nel label, posizione esplicita)
     for o in organizers:
         nid = f"e{o['id']}"
         seen_node_ids.add(nid)
@@ -164,6 +248,7 @@ def _render_graph() -> None:
             title += f"\n{o['type']}"
         if o.get("hq_city"):
             title += f"\n{o['hq_city']}"
+        ox, oy = org_pos.get(o["id"], (0.0, 0.0))
         nodes.append(Node(
             id=nid,
             label=_label_with_orphans(o["name"], nid),
@@ -172,6 +257,8 @@ def _render_graph() -> None:
             size=22,
             title=title,
             font=NODE_FONT,
+            x=ox,
+            y=oy,
         ))
 
     # Archi venue↔ente (FK organizer_id)
@@ -200,6 +287,7 @@ def _render_graph() -> None:
     for c in isolated_contacts:
         cid = c["id"]
         full_name = " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)"
+        cx, cy = isolated_pos.get(cid, (0.0, 0.0))
         nodes.append(Node(
             id=f"c{cid}",
             label=full_name,
@@ -207,6 +295,8 @@ def _render_graph() -> None:
             shape="dot",
             size=8,
             title=f"Contatto isolato: {full_name}" + (f"\n{c.get('email')}" if c.get("email") else ""),
+            x=cx,
+            y=cy,
         ))
 
     # Legenda compatta
@@ -226,11 +316,13 @@ def _render_graph() -> None:
         height=700,
         width="100%",
         directed=False,
-        physics=True,
+        physics=False,  # posizioni esplicite x/y sui nodi → no auto-layout
         hierarchical=False,
         nodeHighlightBehavior=True,
         highlightColor="#F1C40F",
         collapsible=False,
+        # Smussa gli archi così non si sovrappongono al passaggio tra colonne di enti
+        staticGraphWithDragAndDrop=False,
     )
     clicked = agraph(nodes=nodes, edges=edges, config=config)
 

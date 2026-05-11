@@ -68,7 +68,7 @@ def _compute_overdue(venues: list[dict]) -> list[tuple]:
                 out.append((days_since, v, last))
         except Exception:
             continue
-    out.sort(reverse=True)
+    out.sort(key=lambda t: t[0], reverse=True)
     return out
 
 
@@ -88,7 +88,7 @@ def _due_actions(venues: list[dict]) -> None:
                 deadline_soon.append((d, v))
         except Exception:
             continue
-    deadline_soon.sort()
+    deadline_soon.sort(key=lambda t: t[0])
 
     overdue_followups = _compute_overdue(venues)
 

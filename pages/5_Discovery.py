@@ -743,10 +743,16 @@ else:
                             })
                             db.link_organizer_contact(org_id, ocid)
 
-                    # Genera draft email con LLM (sfrutta tutti i context: profilo, speaker, venue arricchita, contatto)
+                    # Genera draft con LLM. Passiamo il `recommended_first_channel` come
+                    # canale prescritto: se la Discovery ha valutato che la venue va contattata
+                    # per telefono o DM LinkedIn, il drafter deve produrre uno script o un DM,
+                    # NON una mail. Senza override il modello ri-decideva da capo e tendeva
+                    # sempre a email.
                     fresh_venue = db.get_venue(new_venue_id)
                     fresh_contact = db.get_contact(new_contact_id) if new_contact_id else None
-                    draft = claude.draft_first_email(fresh_venue, fresh_contact)
+                    draft = claude.draft_first_email(
+                        fresh_venue, fresh_contact, recommended_channel=chan_local,
+                    )
 
                     # Salva interazione come draft non confermato.
                     # is_draft=1 → l'utente deve aprire la venue in Outreach e confermare/modificare

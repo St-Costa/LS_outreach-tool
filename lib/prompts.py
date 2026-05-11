@@ -314,6 +314,44 @@ def contact_cross_venue_history_block(contact: Optional[dict], interactions: lis
 
 # --------- Task prompts ----------
 
+CHANNEL_FORMAT_RULES = """# FORMATO PER CANALE — REGOLE CONDIVISE
+
+Il `channel_suggestion` di output determina il formato del body e del subject. Se il context include una raccomandazione esplicita di canale (es. blocco analisi outreach con `recommended_channel`, oppure parametro `CANALE PRESCRITTO` nel prompt), **usalo come default** e adatta il formato di conseguenza.
+
+## channel = "email"
+- `subject`: oggetto secondo §18 delle linee guida (35-55 char, hard cap 65; nome programma/venue obbligatorio).
+- `body`: testo email standard. Saluto, paragrafi, firma secondo §5 (mai placeholder; sempre nome completo + link https://www.lucanesler.com/brand-storyfication/).
+
+## channel ∈ {"li_dm", "ig_dm", "fb_dm"} (DM social)
+- `subject`: **stringa vuota**.
+- `body`: messaggio DM, 60-150 parole. Stile diretto e conversazionale, niente saluto formale stile "Gentile…", niente firma con link a fine messaggio (su LinkedIn il profilo è già visibile; idem su IG/FB). Le linee guida §0.0 (anti-allucinazione) e §0.1-0.6 (blacklist linguistica) restano valide.
+
+## channel = "phone" (chiamata telefonica)
+- `subject`: **stringa vuota**.
+- `body`: NON una mail. Devi produrre uno **SCRIPT DI CHIAMATA** in formato markdown leggero. Struttura obbligata:
+
+  ```
+  📞 SCRIPT CHIAMATA — durata target 3-5 minuti
+
+  APERTURA (10-20 sec)
+  «Buongiorno, sono [Luca/Stefano] di [contesto in una riga]. [Aggancio specifico al motivo: se primo contatto "ho seguito il vostro [programma X] e..."; se follow-up "ho scritto qualche settimana fa a [riferimento]..."]. Ha 3 minuti?»
+
+  PUNTI CHIAVE
+  - [punto 1: aggancio concreto al loro contesto / novità]
+  - [punto 2: cosa proponiamo, in una frase]
+  - [punto 3: prova/credibilità in una frase]
+
+  CHIUSURA / CTA
+  «[Domanda concreta sì/no o richiesta operativa, es. 'le mando in giornata una scheda sintetica via mail? a quale indirizzo?']»
+
+  NOTE PER IL CHIAMANTE
+  - [eventuale anticipo: se chiede X, rispondere Y]
+  - [se risponde la segreteria: lasciare messaggio breve con motivo + dire che richiamiamo entro Z giorni]
+  ```
+  Lunghezza totale 120-220 parole. Lo script deve essere usabile leggendolo a voce: frasi parlate brevi, niente periodi lunghi. **NESSUNA firma né link nello script** — il telefono non li trasmette.
+"""
+
+
 DRAFT_FIRST_EMAIL_TASK = """COMPITO: genera il draft di una nuova email/messaggio verso questa venue.
 
 # COME USARE I CONTEXT BLOCKS
@@ -323,10 +361,13 @@ DRAFT_FIRST_EMAIL_TASK = """COMPITO: genera il draft di una nuova email/messaggi
 - **ENTE / ALTRE SEDI DELLO STESSO ENTE**: se compilato, la venue corrente fa parte di un Ente più grande (es. distretto Rotary, ateneo, network). Mantieni coerenza col tono usato per le sedi sorelle e, se altre sedi hanno già accettato/rifiutato, calibrane di conseguenza l'aspettativa. Non ri-presentare il progetto da zero se la relazione con l'Ente esiste già altrove.
 - **VENUE SIMILI**: prendi spunto su tono, lunghezza, taglio dell'angolo (storytelling vs AI vs misto). NON copiare frasi: usa solo come riferimento di stile.
 
+# SCELTA DEL CANALE
+Se il context include un blocco `CANALE PRESCRITTO` (parametro esplicito passato dal chiamante, es. dalla Discovery che ha già valutato il canale per il primo contatto), **usa quello** come `channel_suggestion` di output e adatta il formato del body secondo `# FORMATO PER CANALE — REGOLE CONDIVISE` (vedi sopra nel prompt). Altrimenti decidi tu il canale in base a: qualità email disponibile, attività online del referente, tipo di organizzazione (B2B istituzionale → email; community indie → DM social; venue piccola/locale senza canali digitali → phone).
+
 Output JSON con questo schema esatto:
 {
-  "subject": "oggetto della mail SECONDO le regole §18 delle linee guida (35-55 char, hard cap 65; nome programma/venue OBBLIGATORIO; pattern per profilo §0.8.0; mai iniziare con 'Proposta di X'; niente em-dash; vuoto se canale non email)",
-  "body": "corpo del messaggio, formattato con saluto, paragrafi, firma SECONDO le regole §5 delle linee guida (mai placeholder come [Speaker]: scrivere sempre 'Luca Nesler' oppure 'Luca Nesler\\nStefano Costa' a seconda del contenuto, seguito SEMPRE dal link https://www.lucanesler.com/brand-storyfication/)",
+  "subject": "oggetto secondo §18 (35-55 char, vuoto se canale ≠ email)",
+  "body": "corpo del messaggio O script chiamata, formato secondo le regole condivise sopra",
   "channel_suggestion": "email|li_dm|ig_dm|fb_dm|phone (canale consigliato per il primo contatto)",
   "speaker_choice": "Luca|Stefano|entrambi",
   "tone": "formale|cordiale|informale|tecnico",
@@ -335,8 +376,7 @@ Output JSON con questo schema esatto:
 }
 
 Vincoli:
-- Lunghezza body: 150-280 parole per email; 80-150 per DM social.
-- Se il canale è social, niente oggetto (subject vuoto).
+- Lunghezza body (canale email): 150-280 parole. Per DM e phone vedi regole condivise.
 - Se la venue è in tedesco e nessuno speaker parla tedesco, scrivi in italiano e nota nel body che l'intervento sarebbe in italiano.
 - Non inventare numeri o credenziali non presenti nei profili.
 """
@@ -345,42 +385,12 @@ Vincoli:
 DRAFT_FOLLOW_UP_TASK = """COMPITO: proponi timing e draft del follow-up dopo l'invio precedente e l'eventuale risposta.
 
 # SCELTA DEL CANALE — IMPORTANTE
-Se il context include un blocco `ANALISI APPROFONDITA APPENA EFFETTUATA` con `recommended_channel`, **usa quello come canale di default** e adatta il formato del body di conseguenza. Altrimenti scegli tu il canale più sensato (email, li_dm, ig_dm, fb_dm, phone) considerando: storico di ghosting, qualità delle email disponibili, presenza del referente su LinkedIn, natura della venue.
+Se il context include un blocco `ANALISI APPROFONDITA APPENA EFFETTUATA` con `recommended_channel`, **usa quello come canale di default** e adatta il formato del body secondo `# FORMATO PER CANALE — REGOLE CONDIVISE` (vedi sopra nel prompt). Altrimenti scegli tu il canale più sensato (email, li_dm, ig_dm, fb_dm, phone) considerando: storico di ghosting, qualità delle email disponibili, presenza del referente su LinkedIn, natura della venue.
 
 Non rispondere mai con la quarta mail consecutiva su un thread ghostato: a quel punto cambia canale (LinkedIn DM o telefono) o segnala in `rationale` che conviene fermarsi.
 
-# FORMATO PER CANALE
-
-## Se channel_suggestion = "email"
-- `subject`: oggetto compilato secondo §18 delle linee guida (35-55 char, hard cap 65).
-- `body`: testo email standard, 80-180 parole (più breve dell'originale). Saluto, paragrafi, firma secondo §5.
-
-## Se channel_suggestion ∈ {"li_dm", "ig_dm", "fb_dm"}
-- `subject`: stringa vuota.
-- `body`: messaggio DM, 60-150 parole. Niente saluto formale stile "Gentile…": stile più diretto e conversazionale. Niente firma con link a fine messaggio (su LinkedIn il profilo è già visibile; su IG/FB idem). Le linee guida §0.0 (anti-allucinazione) e §0.1-0.6 (blacklist) restano valide.
-
-## Se channel_suggestion = "phone"
-- `subject`: stringa vuota.
-- `body`: **SCRIPT PER CHIAMATA TELEFONICA**, non una mail. Formato obbligato (markdown leggero):
-  ```
-  📞 SCRIPT CHIAMATA — durata target 3-5 minuti
-
-  APERTURA (10-20 sec)
-  «Buongiorno, sono [Luca/Stefano] di [contesto in una riga]. Ho scritto qualche settimana fa a [riferimento], la disturbo per [motivo concreto]. Ha 3 minuti?»
-
-  PUNTI CHIAVE
-  - [punto 1: aggancio concreto al loro contesto / novità]
-  - [punto 2: cosa proponiamo, in una frase]
-  - [punto 3: prova/credibilità in una frase]
-
-  CHIUSURA / CTA
-  «[Domanda concreta sì/no o richiesta operativa: es. 'le mando in giornata una scheda sintetica via mail? a quale indirizzo?']»
-
-  NOTE PER IL CHIAMANTE
-  - [eventuale anticipo: se chiede X, rispondere Y]
-  - [se segreteria: lasciare messaggio breve con motivo + richiamo nostro entro Z giorni]
-  ```
-  Lunghezza totale 120-220 parole. Lo script DEVE essere usabile leggendolo a voce: niente periodi lunghi, frasi parlate. Il `subject` resta vuoto. **NESSUNA firma né link nello script.**
+# LUNGHEZZA DEL BODY (canale = email)
+Per il follow-up via email il body è **più breve dell'originale**: 80-180 parole. Le regole di lunghezza per DM e phone sono nel blocco condiviso sopra.
 
 # VINCOLI GENERALI
 - Se la risposta è già stata ricevuta e positiva, `should_send=true` ma rispondi alla loro proposta (non fare follow-up "freddo").

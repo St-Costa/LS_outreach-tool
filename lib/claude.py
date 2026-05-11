@@ -636,34 +636,72 @@ def _organizer_context_for_venue(venue: dict) -> tuple[Optional[dict], list[dict
     return organizer, siblings, sibling_ints
 
 
+def _prescribed_channel_block(channel: Optional[str]) -> Optional[str]:
+    """Blocco che istruisce il drafter a usare un canale specifico (da Discovery o analisi).
+
+    Quando il chiamante ha già deciso il canale a monte (es. Discovery ha valutato
+    recommended_first_channel su tutte le venue, o l'analisi outreach ha scelto phone),
+    il drafter non deve ri-decidere: deve usarlo e adattare il formato del body.
+    """
+    if not channel:
+        return None
+    channel_human = {
+        "email": "Email",
+        "li_dm": "LinkedIn DM",
+        "ig_dm": "Instagram DM",
+        "fb_dm": "Facebook DM",
+        "phone": "Telefono (chiamata)",
+    }.get(channel, channel)
+    return (
+        f"=== CANALE PRESCRITTO: {channel_human} ({channel}) ===\n"
+        f"Il chiamante ha già scelto il canale: usalo come `channel_suggestion` di output "
+        "e adatta il formato del body secondo le REGOLE CONDIVISE FORMATO PER CANALE. "
+        + ("Per phone: produci uno SCRIPT di chiamata, NON una mail. "
+           if channel == "phone" else "")
+        + ("Per DM: subject vuoto, body 60-150 parole conversazionali, niente firma. "
+           if channel in ("li_dm", "ig_dm", "fb_dm") else "")
+        + "Se hai forti motivi per discostarti, segnalalo nel `rationale`, ma il default è questo canale."
+    )
+
+
 def build_draft_first_email_prompt(
     venue: dict,
     contact: Optional[dict],
     selected_attachment_ids: Optional[list[int]] = None,
+    recommended_channel: Optional[str] = None,
 ) -> str:
     """Restituisce il testo del prompt assemblato (utile per debug/inspection in UI).
 
     Le email guidelines sono nei system blocks (cachate), non in user_text.
+    CHANNEL_FORMAT_RULES è anteposto al task così entrambi i drafter (prima mail +
+    follow-up) condividono lo stesso vocabolario di formato per canale.
     """
-    return "\n\n".join(
-        _build_draft_context_blocks(venue, contact, selected_attachment_ids)
-        + [prompts.DRAFT_FIRST_EMAIL_TASK]
-    )
+    parts = _build_draft_context_blocks(venue, contact, selected_attachment_ids)
+    prescribed = _prescribed_channel_block(recommended_channel)
+    if prescribed:
+        parts.append(prescribed)
+    parts.append(prompts.CHANNEL_FORMAT_RULES)
+    parts.append(prompts.DRAFT_FIRST_EMAIL_TASK)
+    return "\n\n".join(parts)
 
 
 def draft_first_email(
     venue: dict,
     contact: Optional[dict],
     selected_attachment_ids: Optional[list[int]] = None,
+    recommended_channel: Optional[str] = None,
 ) -> dict:
-    """Genera la prima mail per una venue. Output JSON: subject, body, channel_suggestion, speaker_choice, tone, language, rationale.
+    """Genera la prima mail/DM/script per una venue.
 
-    Inietta nel prompt: profilo venue + contact, history same_venue, similar
-    venues con storia, ente madre + venue sorelle, history cross-venue del
-    contatto, allegati selezionati + già inviati. Esclude draft non confermati.
+    `recommended_channel`: se passato (tipicamente dalla Discovery che ha già valutato
+    `recommended_first_channel`), il drafter lo usa come default e adatta il body —
+    una venue su cui la Discovery dice "phone" produce uno script di chiamata, non
+    una mail. Senza override, il modello decide da solo (come prima).
     """
     speakers, profile = _ctx()
-    user_text = build_draft_first_email_prompt(venue, contact, selected_attachment_ids)
+    user_text = build_draft_first_email_prompt(
+        venue, contact, selected_attachment_ids, recommended_channel=recommended_channel,
+    )
     return _call_json(
         system_blocks=_build_system_blocks(speakers, profile, include_email_guidelines=True),
         user_text=user_text,
@@ -888,10 +926,22 @@ def draft_follow_up(
                 ),
             ))
     parts.append(history_text)
+    # Se l'analisi outreach ha già un recommended_channel, lo trattiamo come canale
+    # prescritto: il drafter NON deve ri-decidere. _analysis_context_block lo segnala
+    # comunque, ma `_prescribed_channel_block` rinforza l'istruzione con un blocco
+    # dedicato a livello del task (coerente con la prima mail dalla Discovery).
     if analysis_context:
         analysis_block = _analysis_context_block(analysis_context, contact_switched=contact_switched)
         if analysis_block:
             parts.append(analysis_block)
+        _rec_chan = (
+            ((analysis_context.get("follow_up_plan") or {}).get("recommended_channel") or "").strip()
+            or None
+        )
+        prescribed = _prescribed_channel_block(_rec_chan)
+        if prescribed:
+            parts.append(prescribed)
+    parts.append(prompts.CHANNEL_FORMAT_RULES)
     parts.append(prompts.DRAFT_FOLLOW_UP_TASK)
     user_text = "\n\n".join(parts)
     return _call_json(

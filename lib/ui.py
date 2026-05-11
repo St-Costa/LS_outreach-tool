@@ -66,45 +66,6 @@ def apply_global_style() -> None:
     st.markdown(_GLOBAL_CSS, unsafe_allow_html=True)
 
 
-def confirm_destructive(
-    label: str,
-    confirm_message: str,
-    state_key: str,
-    *,
-    button_kwargs: dict | None = None,
-) -> bool:
-    """Pattern uniforme per delete/clear con conferma a 2 step.
-
-    Usage:
-        if ui.confirm_destructive("Elimina venue", "Verranno rimosse anche le interazioni.", f"del_venue_{vid}"):
-            db.delete_venue(vid); st.rerun()
-
-    Comportamento: primo click → mostra warning + bottoni 'Sì, conferma' / 'Annulla'.
-    Ritorna True solo quando l'utente clicca 'Sì, conferma'. Lo stato è memorizzato
-    in `st.session_state[state_key]` (auto-cleanup su Annulla).
-    """
-    button_kwargs = button_kwargs or {}
-    armed = st.session_state.get(state_key) is True
-
-    if not armed:
-        if st.button(label, key=f"_btn_arm_{state_key}", **button_kwargs):
-            st.session_state[state_key] = True
-            st.rerun()
-        return False
-
-    st.warning(confirm_message)
-    cc1, cc2 = st.columns([1, 5])
-    confirmed = cc1.button("Sì, conferma", key=f"_btn_yes_{state_key}", type="primary")
-    cancelled = cc2.button("Annulla", key=f"_btn_no_{state_key}")
-    if confirmed:
-        st.session_state.pop(state_key, None)
-        return True
-    if cancelled:
-        st.session_state.pop(state_key, None)
-        st.rerun()
-    return False
-
-
 def _ics_escape(s: str) -> str:
     """Escape minimo per testo in proprietà ICS (RFC 5545)."""
     if not s:

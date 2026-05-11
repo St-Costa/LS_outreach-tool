@@ -762,6 +762,38 @@ def list_contacts(filters: Optional[dict] = None) -> list[dict]:
         return rows_to_dicts(conn.execute(sql, params).fetchall())
 
 
+def find_contact_by_email(email: str) -> Optional[dict]:
+    """Match esatto case-insensitive sull'email. None se email vuota o nessun match.
+
+    Usato per evitare duplicati quando l'analisi di outreach propone un contatto
+    "nuovo" che però è già nel DB (es. perché trovato in passato da discovery).
+    """
+    if not (email or "").strip():
+        return None
+    with transaction() as conn:
+        row = conn.execute(
+            "SELECT * FROM contacts WHERE LOWER(email) = LOWER(?) LIMIT 1",
+            (email.strip(),),
+        ).fetchone()
+        return row_to_dict(row)
+
+
+def backfill_null_contact_for_venue(venue_id: int, contact_id: int) -> int:
+    """Aggiorna tutte le interactions della venue con contact_id NULL al contact_id passato.
+
+    Ritorna il numero di righe aggiornate. Idempotente: se non ci sono NULL, ritorna 0.
+    Usato come 'pulizia storico' prima di switchare il referente: l'utente afferma
+    di non aver mai fatto follow-up a contatti diversi sulla stessa venue, quindi
+    le interazioni orfane appartengono per definizione al contatto attualmente in uso.
+    """
+    with transaction() as conn:
+        cur = conn.execute(
+            "UPDATE interactions SET contact_id=? WHERE venue_id=? AND contact_id IS NULL",
+            (contact_id, venue_id),
+        )
+        return cur.rowcount
+
+
 def link_venue_contact(venue_id: int, contact_id: int) -> None:
     with transaction() as conn:
         conn.execute(

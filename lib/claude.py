@@ -707,13 +707,19 @@ def refine_first_email(
     )
 
 
-def _analysis_context_block(analysis: dict) -> str:
+def _analysis_context_block(analysis: dict, contact_switched: bool = False) -> str:
     """Rendering one-shot del risultato di analyze_outreach_approach come blocco prompt.
 
     Non viene persistito: è valido solo per la singola chiamata di drafting che riceve
     `analysis_context`. Serve a iniettare fit aggiornato + segnali + piano nel drafter
     senza dover passare dal `summary` testuale nelle note venue (che è invece
-    salvato permanentemente)."""
+    salvato permanentemente).
+
+    `contact_switched`: se True, l'utente ha già adottato il `better_contact` come
+    nuovo referente (creato/recuperato in DB e passato come `contact=` al drafter).
+    Il blocco istruisce esplicitamente il modello a indirizzare la mail alla NUOVA
+    persona, presentandosi come nuovo contatto invece che continuare un thread.
+    """
     if not analysis:
         return ""
     parts = ["=== ANALISI APPROFONDITA APPENA EFFETTUATA (one-shot, non persistita su DB) ==="]
@@ -722,6 +728,19 @@ def _analysis_context_block(analysis: dict) -> str:
         "Usali come scheletro per il follow-up: applica oggetto/angolo/tono suggeriti, "
         "salvo controindicazioni evidenti rispetto a profilo speaker o linee guida."
     )
+    if contact_switched:
+        parts.append(
+            "⚠️ **CAMBIO REFERENTE — IMPORTANTE:** l'utente ha appena cambiato contatto. "
+            "La mail va indirizzata al NUOVO referente (quello passato come CONTATTO nel "
+            "context, non al precedente). Apri il messaggio presentandoti come se fosse "
+            "un primo contatto verso questa persona: spiega in 1-2 righe che ti sei rivolto "
+            "a lei dopo aver individuato il suo ruolo come referente più adatto per questa "
+            "proposta. NON scrivere «come da nostro precedente scambio» o «riprendendo il "
+            "filo»: con questa persona non c'è stato nessuno scambio prima. Puoi però "
+            "menzionare brevemente, se utile, che avevamo già scritto alla venue in passato "
+            "tramite un altro canale/referente, ma evita di esporre confidenze sui contenuti "
+            "delle precedenti mail."
+        )
 
     fit = analysis.get("fit_reassessment") or {}
     if fit:
@@ -746,7 +765,12 @@ def _analysis_context_block(analysis: dict) -> str:
 
     bc = analysis.get("better_contact") or {}
     if bc.get("name") or bc.get("email"):
-        bc_lines = ["\n-- Contatto alternativo suggerito (NON ancora salvato in DB) --"]
+        bc_header = (
+            "\n-- Contatto alternativo ADOTTATO come nuovo referente --"
+            if contact_switched
+            else "\n-- Contatto alternativo suggerito (non adottato in questa generazione) --"
+        )
+        bc_lines = [bc_header]
         for k, label in (("name", "Nome"), ("role", "Ruolo"), ("email", "Email"),
                           ("phone", "Telefono"), ("source_url", "Fonte")):
             if bc.get(k):
@@ -780,6 +804,7 @@ def draft_follow_up(
     days_since: int,
     selected_attachment_ids: Optional[list[int]] = None,
     analysis_context: Optional[dict] = None,
+    contact_switched: bool = False,
 ) -> dict:
     """Suggerisce timing + draft di un follow-up. Output JSON: timing_suggestion_days, should_send (bool), subject, body, channel_suggestion, rationale.
 
@@ -833,7 +858,7 @@ def draft_follow_up(
             ))
     parts.append(history_text)
     if analysis_context:
-        analysis_block = _analysis_context_block(analysis_context)
+        analysis_block = _analysis_context_block(analysis_context, contact_switched=contact_switched)
         if analysis_block:
             parts.append(analysis_block)
     parts.append(prompts.DRAFT_FOLLOW_UP_TASK)

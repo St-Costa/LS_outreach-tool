@@ -904,6 +904,154 @@ if prior_outgoing > 0:
                 st.session_state.pop(analysis_key, None)
                 st.rerun()
 
+        elif action == "switch_contact":
+            bc = result.get("better_contact") or {}
+            if not (bc.get("name") or bc.get("email")):
+                st.error(
+                    "L'analisi consiglia di cambiare contatto ma `better_contact` è vuoto: "
+                    "non posso procedere automaticamente. Riformula manualmente o rilancia l'analisi."
+                )
+            else:
+                # Lookup: il contatto suggerito esiste già in DB? (match per email esatta)
+                existing_match = (
+                    db.find_contact_by_email(bc.get("email", ""))
+                    if bc.get("email") else None
+                )
+                if existing_match:
+                    em_name = " ".join(filter(
+                        None, [existing_match.get("first_name"), existing_match.get("last_name")]
+                    )).strip() or "(senza nome)"
+                    em_role = existing_match.get("role") or "—"
+                    st.info(
+                        f"✓ Contatto già in DB: **{em_name}** · {em_role} · "
+                        f"`{existing_match.get('email', '')}`. Verrà usato come nuovo referente; "
+                        "se il link a questa venue manca, viene aggiunto."
+                    )
+                else:
+                    email_part = (
+                        f"`{bc.get('email', '')}`" if bc.get("email") else "(nessuna email)"
+                    )
+                    st.warning(
+                        f"Nessun contatto in DB con email {email_part}. "
+                        "Verrà creato un nuovo record e linkato a questa venue."
+                    )
+
+                # Determina il contatto "attualmente in uso" (= contact_id dell'ultima
+                # mail uscente). Serve a backfillare le interazioni orfane (contact_id NULL)
+                # PRIMA dello switch, così lo storico resta associato al referente giusto.
+                _last_out_cid = (last_outgoing or {}).get("contact_id")
+                _cur_contact = db.get_contact(_last_out_cid) if _last_out_cid else None
+                if _cur_contact:
+                    _cur_name = " ".join(filter(
+                        None, [_cur_contact.get("first_name"), _cur_contact.get("last_name")]
+                    )).strip() or "(senza nome)"
+                    n_null = sum(1 for it in interactions if not it.get("contact_id"))
+                    if n_null:
+                        st.caption(
+                            f"📎 {n_null} interazione/i orfana/e verranno associate al "
+                            f"referente attuale (**{_cur_name}**) prima dello switch."
+                        )
+                    else:
+                        st.caption(f"📎 Storico già pulito (referente attuale: **{_cur_name}**).")
+                else:
+                    st.caption(
+                        "📎 Le mail precedenti non avevano un contatto specifico associato — "
+                        "niente backfill possibile, le interazioni storiche restano senza referente."
+                    )
+
+                if st.button(
+                    "✅ Adotta nuovo referente e genera follow-up",
+                    key=f"btn_adopt_switch_{venue['id']}",
+                    type="primary",
+                    help=(
+                        "1) Associa lo storico al referente attuale (se ce n'è uno); "
+                        "2) salva/usa il nuovo referente in DB; "
+                        "3) genera il draft del follow-up indirizzato al nuovo contatto, "
+                        "con il prompt che spiega che è un primo contatto verso questa persona."
+                    ),
+                ):
+                    try:
+                        # 1) Backfill NULL → contatto attuale
+                        if _cur_contact:
+                            n_back = db.backfill_null_contact_for_venue(
+                                venue["id"], _cur_contact["id"]
+                            )
+                            if n_back:
+                                st.toast(
+                                    f"📎 {n_back} interazione/i orfane associate a "
+                                    f"{_cur_contact.get('first_name','')} "
+                                    f"{_cur_contact.get('last_name','')}".strip(),
+                                    icon="📎",
+                                )
+
+                        # 2) Risolvi nuovo contatto: esistente o crealo
+                        if existing_match:
+                            new_contact_id = existing_match["id"]
+                            db.link_venue_contact(venue["id"], new_contact_id)
+                        else:
+                            full = (bc.get("name") or "").strip()
+                            first, last = None, None
+                            if full:
+                                _parts = full.split(maxsplit=1)
+                                first = _parts[0]
+                                last = _parts[1] if len(_parts) > 1 else None
+                            new_contact_id = db.insert_contact({
+                                "first_name": first,
+                                "last_name": last,
+                                "role": bc.get("role") or None,
+                                "email": bc.get("email") or None,
+                                "phone": bc.get("phone") or None,
+                                "language_pref": venue.get("language") or "IT",
+                                "notes": (
+                                    f"[Adottato come nuovo referente {date.today().isoformat()}]\n"
+                                    f"Fonte: {bc.get('source_url', '—')}\n"
+                                    f"Motivazione LLM: {bc.get('rationale', '—')}\n"
+                                    f"Email confidence: {bc.get('email_confidence', '?')}"
+                                ),
+                            })
+                            db.link_venue_contact(venue["id"], new_contact_id)
+                            st.toast(f"✓ Nuovo contatto creato (id {new_contact_id})", icon="✓")
+
+                        new_contact = db.get_contact(new_contact_id)
+
+                        # 3) Genera draft follow-up indirizzato al NUOVO contatto
+                        last_received_now = next(
+                            (i for i in reversed(interactions) if i.get("direction") == "ricevuta"),
+                            None,
+                        )
+                        days_since_now = 0
+                        if last_outgoing:
+                            try:
+                                _occ = last_outgoing.get("occurred_at")
+                                if isinstance(_occ, str):
+                                    _occ = datetime.fromisoformat(_occ)
+                                days_since_now = (datetime.now() - _occ).days if _occ else 0
+                            except Exception:
+                                days_since_now = 0
+                        with st.spinner("Generazione draft per il nuovo referente..."):
+                            draft = claude.draft_follow_up(
+                                venue, new_contact, last_outgoing, last_received_now,
+                                days_since_now,
+                                list(st.session_state.get(sel_key, [])),
+                                analysis_context=result,
+                                contact_switched=True,
+                            )
+                        st.session_state["active_draft"] = draft
+                        st.session_state["active_draft_venue_id"] = venue["id"]
+                        st.session_state["active_draft_is_followup"] = True
+                        # Forza il save handler a usare il NUOVO contact_id, altrimenti
+                        # ranked_contacts (basato su storia) ripiega ancora sul vecchio.
+                        st.session_state[f"active_draft_contact_id_{venue['id']}"] = new_contact_id
+                        st.session_state["draft_refinement_history"] = [
+                            {"role": "draft", "content": draft}
+                        ]
+                        st.session_state["active_draft_version"] = (
+                            st.session_state.get("active_draft_version", 0) + 1
+                        )
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Errore: {e}")
+
         elif action in ("follow_up", "wait"):
             plan = result.get("follow_up_plan") or {}
             if plan.get("rationale"):
@@ -1224,12 +1372,16 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
     # come callout in grassetto). Utile per portare la mail in altri editor / archiviarla.
     _md_atts = [db.get_attachment(aid) for aid in selected_ids_now]
     _md_atts = [a for a in _md_atts if a]
+    # Se è in corso uno switch_contact, il draft è indirizzato al nuovo contatto:
+    # mostralo come destinatario nel .md (non il vecchio top-ranked).
+    _forced_cid_export = st.session_state.get(f"active_draft_contact_id_{venue['id']}")
+    _md_contact = db.get_contact(_forced_cid_export) if _forced_cid_export else contact_for_draft
     md_export = build_draft_markdown(
         venue=venue,
         subject=edited_subject,
         body=edited_body,
         attachments=_md_atts,
-        contact=contact_for_draft,
+        contact=_md_contact,
     )
     _md_filename = f"mail_{_slugify(venue.get('name') or 'venue')}_{date.today().isoformat()}.md"
     st.download_button(
@@ -1263,9 +1415,16 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
         occurred_at = datetime.combine(
             save_date, datetime.now().time()
         ).isoformat(sep=" ", timespec="seconds")
+        # Se l'utente ha appena adottato un nuovo referente dall'analisi outreach,
+        # contact_for_draft (basato sul ranking storico) punta ancora al vecchio.
+        # La chiave forced_contact override garantisce che il save vada al nuovo.
+        forced_cid = st.session_state.get(f"active_draft_contact_id_{venue['id']}")
+        effective_contact_id = forced_cid or (
+            contact_for_draft["id"] if contact_for_draft else None
+        )
         if pending_iid:
             # Conferma del draft esistente: aggiorna la riga, togli il flag draft.
-            db.update_interaction(pending_iid, {
+            _upd = {
                 "occurred_at": occurred_at,
                 "channel": save_channel,
                 "type": derived_type,
@@ -1273,7 +1432,12 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
                 "content": edited_body,
                 "is_draft": 0,
                 "speaker_choice": draft.get("speaker_choice"),
-            })
+            }
+            # Quando arriviamo da uno switch_contact, sovrascriviamo anche il
+            # contact_id del draft pending (era stato salvato col vecchio referente).
+            if forced_cid:
+                _upd["contact_id"] = forced_cid
+            db.update_interaction(pending_iid, _upd)
             saved_iid = pending_iid
         else:
             saved_iid = db.insert_interaction({
@@ -1281,7 +1445,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
                 "channel": save_channel,
                 "direction": "inviata",
                 "venue_id": venue["id"],
-                "contact_id": contact_for_draft["id"] if contact_for_draft else None,
+                "contact_id": effective_contact_id,
                 "type": derived_type,
                 "subject": edited_subject,
                 "content": edited_body,
@@ -1306,6 +1470,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
             "draft_refinement_history", "active_draft_version",
         ):
             st.session_state.pop(k, None)
+        st.session_state.pop(f"active_draft_contact_id_{venue['id']}", None)
         st.rerun()
 
     discard_label = "Elimina draft" if pending_iid else "Scarta draft"
@@ -1320,6 +1485,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
             "draft_refinement_history", "active_draft_version",
         ):
             st.session_state.pop(k, None)
+        st.session_state.pop(f"active_draft_contact_id_{venue['id']}", None)
         st.rerun()
 
 

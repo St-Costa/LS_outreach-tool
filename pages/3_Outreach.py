@@ -882,6 +882,17 @@ if prior_outgoing > 0:
                 if bc.get("rationale"): rows.append(f"- **Motivazione:** {bc['rationale']}")
                 st.markdown("\n".join(rows))
 
+        # Helper canale → (emoji, label, button verb).
+        # `verb` viene usato nella label del bottone (es. 'Crea follow-up via email',
+        # 'Crea bozza DM LinkedIn', 'Crea script telefonico').
+        CHANNEL_UI = {
+            "email": ("📨", "Email", "follow-up via email"),
+            "li_dm": ("💼", "LinkedIn DM", "bozza DM LinkedIn"),
+            "ig_dm": ("📷", "Instagram DM", "bozza DM Instagram"),
+            "fb_dm": ("📘", "Facebook DM", "bozza DM Facebook"),
+            "phone": ("📞", "Telefono", "script telefonico"),
+        }
+
         # 4. Prossima azione consigliata
         action = result.get("next_action") or "follow_up"
         action_labels = {
@@ -959,14 +970,36 @@ if prior_outgoing > 0:
                         "niente backfill possibile, le interazioni storiche restano senza referente."
                     )
 
+                # Piano + canale anche per lo switch: la prima mail al nuovo referente
+                # erediterà canale, tono, oggetto/angolo, ma è di fatto un "primo contatto"
+                # (vedi flag contact_switched=True passato al drafter).
+                _switch_plan = result.get("follow_up_plan") or {}
+                _switch_chan = (_switch_plan.get("recommended_channel") or "email").strip() or "email"
+                _s_emoji, _s_label, _s_verb = CHANNEL_UI.get(
+                    _switch_chan, ("📨", _switch_chan, "messaggio")
+                )
+                _s_box = st.info if _switch_chan == "email" else st.warning
+                _s_lines = [f"**Canale consigliato per il primo contatto:** {_s_emoji} **{_s_label}**"]
+                if _switch_plan.get("channel_rationale"):
+                    _s_lines.append(f"_{_switch_plan['channel_rationale']}_")
+                _s_box("\n\n".join(_s_lines))
+                if _switch_chan == "email" and _switch_plan.get("subject_hint"):
+                    st.markdown(f"**Oggetto suggerito:** «{_switch_plan['subject_hint']}»")
+                if _switch_plan.get("body_hint"):
+                    _hint_lbl = (
+                        "Punti chiave dello script" if _switch_chan == "phone"
+                        else "Angolo / elemento nuovo"
+                    )
+                    st.markdown(f"**{_hint_lbl}:**\n\n> {_switch_plan['body_hint']}")
+
                 if st.button(
-                    "✅ Adotta nuovo referente e genera follow-up",
+                    f"✅ Adotta nuovo referente e crea {_s_verb}",
                     key=f"btn_adopt_switch_{venue['id']}",
                     type="primary",
                     help=(
                         "1) Associa lo storico al referente attuale (se ce n'è uno); "
                         "2) salva/usa il nuovo referente in DB; "
-                        "3) genera il draft del follow-up indirizzato al nuovo contatto, "
+                        f"3) genera il draft ({_s_label}) indirizzato al nuovo contatto, "
                         "con il prompt che spiega che è un primo contatto verso questa persona."
                     ),
                 ):
@@ -1056,28 +1089,43 @@ if prior_outgoing > 0:
             plan = result.get("follow_up_plan") or {}
             if plan.get("rationale"):
                 st.markdown(f"**Motivazione:** {plan['rationale']}")
+
+            rec_chan = (plan.get("recommended_channel") or "email").strip() or "email"
+            chan_emoji, chan_label, chan_verb = CHANNEL_UI.get(
+                rec_chan, ("📨", rec_chan, "messaggio")
+            )
+            ch_box = st.info if rec_chan == "email" else st.warning
+            ch_lines = [f"**Canale consigliato:** {chan_emoji} **{chan_label}**"]
+            if plan.get("channel_rationale"):
+                ch_lines.append(f"_{plan['channel_rationale']}_")
+            ch_box("\n\n".join(ch_lines))
+
             cols_info = st.columns(3)
             cols_info[0].metric("Tempistica", f"{plan.get('timing_days', '?')}g da oggi")
             cols_info[1].metric("Tono", plan.get("tone") or "—")
             cols_info[2].metric("Inviare?", "sì" if plan.get("should_send") else "no")
-            if plan.get("subject_hint"):
+            # Subject ha senso solo via email; per phone/DM resta vuoto by design.
+            if rec_chan == "email" and plan.get("subject_hint"):
                 st.markdown(f"**Suggerimento oggetto:** «{plan['subject_hint']}»")
             if plan.get("body_hint"):
-                st.markdown(f"**Angolo / elemento nuovo:**\n\n> {plan['body_hint']}")
+                hint_label = (
+                    "Punti chiave dello script" if rec_chan == "phone"
+                    else "Angolo / elemento nuovo"
+                )
+                st.markdown(f"**{hint_label}:**\n\n> {plan['body_hint']}")
 
             # Bottone dedicato: usa il piano della NUOVA analisi come context one-shot
-            # nel drafter di follow-up. I dettagli strutturati (subject_hint, body_hint,
-            # fit, segnali) sono iniettati nel prompt SOLO per questa generazione: non
-            # vengono salvati (l'unico residuo permanente è il `summary` già appeso
-            # alle note venue al momento dell'analisi).
+            # nel drafter di follow-up. La label cambia in base al canale (script
+            # telefonico, DM, mail) — il drafter adatta il body di conseguenza.
+            btn_label = f"{chan_emoji} Crea {chan_verb} basato su questa analisi"
             if st.button(
-                "📨 Crea follow-up basato su questa analisi",
+                btn_label,
                 key=f"btn_followup_from_analysis_{venue['id']}",
                 type="primary",
                 help=(
-                    "Genera il draft del follow-up iniettando subito nel prompt il piano "
-                    "(oggetto, angolo, tono) emerso dall'analisi. Le info one-shot non vengono "
-                    "salvate: solo il summary già nelle note resta a lungo termine."
+                    "Genera il draft iniettando subito nel prompt il piano (canale, "
+                    "oggetto, angolo, tono) emerso dall'analisi. Le info one-shot non "
+                    "vengono salvate: solo il summary già nelle note resta a lungo termine."
                 ),
             ):
                 with st.spinner("Generazione draft con LLM (con context dell'analisi)..."):

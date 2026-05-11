@@ -344,22 +344,59 @@ Vincoli:
 
 DRAFT_FOLLOW_UP_TASK = """COMPITO: proponi timing e draft del follow-up dopo l'invio precedente e l'eventuale risposta.
 
-Output JSON:
+# SCELTA DEL CANALE — IMPORTANTE
+Se il context include un blocco `ANALISI APPROFONDITA APPENA EFFETTUATA` con `recommended_channel`, **usa quello come canale di default** e adatta il formato del body di conseguenza. Altrimenti scegli tu il canale più sensato (email, li_dm, ig_dm, fb_dm, phone) considerando: storico di ghosting, qualità delle email disponibili, presenza del referente su LinkedIn, natura della venue.
+
+Non rispondere mai con la quarta mail consecutiva su un thread ghostato: a quel punto cambia canale (LinkedIn DM o telefono) o segnala in `rationale` che conviene fermarsi.
+
+# FORMATO PER CANALE
+
+## Se channel_suggestion = "email"
+- `subject`: oggetto compilato secondo §18 delle linee guida (35-55 char, hard cap 65).
+- `body`: testo email standard, 80-180 parole (più breve dell'originale). Saluto, paragrafi, firma secondo §5.
+
+## Se channel_suggestion ∈ {"li_dm", "ig_dm", "fb_dm"}
+- `subject`: stringa vuota.
+- `body`: messaggio DM, 60-150 parole. Niente saluto formale stile "Gentile…": stile più diretto e conversazionale. Niente firma con link a fine messaggio (su LinkedIn il profilo è già visibile; su IG/FB idem). Le linee guida §0.0 (anti-allucinazione) e §0.1-0.6 (blacklist) restano valide.
+
+## Se channel_suggestion = "phone"
+- `subject`: stringa vuota.
+- `body`: **SCRIPT PER CHIAMATA TELEFONICA**, non una mail. Formato obbligato (markdown leggero):
+  ```
+  📞 SCRIPT CHIAMATA — durata target 3-5 minuti
+
+  APERTURA (10-20 sec)
+  «Buongiorno, sono [Luca/Stefano] di [contesto in una riga]. Ho scritto qualche settimana fa a [riferimento], la disturbo per [motivo concreto]. Ha 3 minuti?»
+
+  PUNTI CHIAVE
+  - [punto 1: aggancio concreto al loro contesto / novità]
+  - [punto 2: cosa proponiamo, in una frase]
+  - [punto 3: prova/credibilità in una frase]
+
+  CHIUSURA / CTA
+  «[Domanda concreta sì/no o richiesta operativa: es. 'le mando in giornata una scheda sintetica via mail? a quale indirizzo?']»
+
+  NOTE PER IL CHIAMANTE
+  - [eventuale anticipo: se chiede X, rispondere Y]
+  - [se segreteria: lasciare messaggio breve con motivo + richiamo nostro entro Z giorni]
+  ```
+  Lunghezza totale 120-220 parole. Lo script DEVE essere usabile leggendolo a voce: niente periodi lunghi, frasi parlate. Il `subject` resta vuoto. **NESSUNA firma né link nello script.**
+
+# VINCOLI GENERALI
+- Se la risposta è già stata ricevuta e positiva, `should_send=true` ma rispondi alla loro proposta (non fare follow-up "freddo").
+- Se la risposta è negativa o un cortese rifiuto, `should_send=false`.
+- Timing tipico: 7 giorni per associazioni/club service, 4 se deadline vicina, 10-14 per università/enti pubblici. Per chiamate: timing 0-2 giorni (le chiamate non si "schedulano" come le mail).
+- Tono: ricorda gentilmente, non insistere, aggiungi un piccolo elemento nuovo.
+
+# OUTPUT JSON
 {
   "timing_suggestion_days": 7,
   "should_send": true,
-  "subject": "oggetto del follow-up",
-  "body": "corpo del messaggio",
+  "subject": "oggetto del follow-up (vuoto se canale non è email)",
+  "body": "corpo del messaggio O script di chiamata, secondo il canale scelto",
   "channel_suggestion": "email|li_dm|ig_dm|fb_dm|phone",
-  "rationale": "1-2 frasi"
+  "rationale": "1-2 frasi su perché questo canale + angolo"
 }
-
-Vincoli:
-- Se la risposta è già stata ricevuta e positiva, "should_send" può essere true ma con tono diverso (rispondere alla loro proposta).
-- Se la risposta è negativa o un cortese rifiuto, "should_send" = false.
-- Timing tipico: 7 giorni per associazioni/club service, 4 giorni se deadline vicina, 10-14 per università/enti pubblici.
-- Body più breve dell'originale (80-180 parole).
-- Tono: ricorda gentilmente, non insistere, aggiungi un piccolo elemento nuovo.
 """
 
 
@@ -634,16 +671,32 @@ Sulla base di: storico (prima mail, ev. follow-up, risposte, ghosting), giorni t
 - **`mark_rejected`** — il contatto è quello giusto MA il fit/timing/sintomi indicano che non ne vale la pena (ghosting prolungato, segnali di disinteresse strutturale, scope distante, troppo blasonati per outreach freddo). Spiega in `rejection_reasoning`.
 - **`wait`** — è troppo presto per fare follow-up (es. ≤5 giorni dall'ultima mail) o c'è una ragione concreta per aspettare (deadline futura, evento in corso). Compila `follow_up_plan.timing_days` con i giorni da attendere prima di muoversi.
 
-## 4. Piano di follow-up (solo se `next_action` ∈ {follow_up, wait})
+## 4. Piano di follow-up (solo se `next_action` ∈ {follow_up, wait, switch_contact})
 Compila `follow_up_plan`:
-- `should_send` true se ha senso mandarlo, false se meglio aspettare/rinunciare.
+- `should_send` true se ha senso mandarlo (anche se va inviato fra X giorni), false se meglio rinunciare.
 - `timing_days`: giorni dall'OGGI (non dall'ultima mail) prima del prossimo invio. 0 = subito.
 - `tone`: tonalità consigliata (cordiale|diretto|caldo|formale).
-- `subject_hint`: un suggerimento di oggetto (35-55 char, segui linee guida §18).
-- `body_hint`: 2-4 frasi che indichino l'angolo + l'elemento NUOVO da introdurre nel follow-up (perché stavolta è diverso dalla prima mail), tenendo conto di cosa abbiamo già scritto e di quanto tempo è passato. NON scrivere la mail completa: questi sono hint per il prossimo step di drafting.
-- `rationale`: 1-2 frasi sul perché questo approccio.
 
-Se `next_action` è `switch_contact` o `mark_rejected`: `follow_up_plan.should_send=false`, `timing_days=0`, gli altri campi a stringa vuota.
+- **`recommended_channel`** (DECISIONE IMPORTANTE — non lasciare in automatico su "email"): valuta su quale canale ha più senso fare il prossimo step.
+  - `email` — default per associazioni storiche/banche/università/enti formativi, e quando il referente ha email diretta verificata e non c'è stato ghosting prolungato.
+  - `li_dm` — LinkedIn DM, se il referente è attivo su LinkedIn (post recenti, ruolo aggiornato) E la prima mail è stata ghostata via email da settimane → un cambio di canale può sbloccare. Anche se è un nuovo referente individuato online di cui hai trovato LinkedIn ma non email diretta.
+  - `ig_dm` / `fb_dm` — solo per organizzazioni community-driven dove il social è il canale primario gestito da chi seleziona speaker (coworking indie, eventi grassroots, festival). Raro in B2B serio.
+  - `phone` — quando: (a) ghosting via mail >30 giorni e la venue è una sede locale piccola/media dove c'è una segreteria/presidente raggiungibile; (b) deadline imminente e serve risposta veloce; (c) il referente ha solo numero pubblico, niente email diretta affidabile; (d) la natura della venue (club service, parrocchia, ente locale, scuola) rende il telefono normale o atteso.
+
+  **Ragiona sul senso del canale, non sull'automatismo**: se mail-via-mail-via-mail non hanno funzionato, NON proporre la quarta mail. Se il referente è il direttore di un coworking 30enne, NON proporre la lettera formale via PEC.
+
+- `channel_rationale`: 1-2 frasi su perché QUESTO canale ora, riferite a ciò che hai trovato nella web search (es. "ghosting via mail da 6 settimane + LinkedIn attivo del referente con post settimanali → cambio canale", "deadline call fra 10 giorni + numero diretto pubblicato → telefono per fissare un incontro veloce").
+
+- `subject_hint`: stringa vuota se `recommended_channel` è phone o DM. Altrimenti suggerimento di oggetto (35-55 char, segui linee guida §18).
+- `body_hint`: 2-4 frasi che indichino l'angolo + l'elemento NUOVO da introdurre.
+  - Se `recommended_channel` è `phone`: questi sono i **punti chiave dello script** di chiamata (apertura, motivo, CTA). Il drafter li espanderà in script.
+  - Se DM: idem, ma in chiave conversazionale breve.
+  - Se email: hint testuali standard.
+  NON scrivere la mail/script completi: questi sono hint per il prossimo step di drafting.
+- `rationale`: 1-2 frasi sul perché questo approccio (combinato fit + contatto + canale).
+
+Se `next_action` è `mark_rejected`: `follow_up_plan.should_send=false`, `timing_days=0`, `recommended_channel=""`, gli altri campi a stringa vuota.
+Se `next_action` è `switch_contact`: compila il piano per il PRIMO contatto verso il nuovo referente (quindi più "primo approccio" che "follow-up"). Il canale qui pesa parecchio: se hai trovato il nuovo referente su LinkedIn senza email verificata, `recommended_channel` è probabilmente `li_dm`.
 
 ## 5. Sintesi salvabile
 Compila `summary` con 4-8 righe markdown che riassumono in italiano: il fit aggiornato (score + attività recenti chiave), cosa hai scoperto sul contatto, decisione, prossima azione consigliata, eventuali link/fonti utili. Questo testo verrà salvato nelle note della venue, quindi deve essere autosufficiente (riferimenti espliciti, date, link).

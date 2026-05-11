@@ -404,8 +404,16 @@ ANALYZE_OUTREACH_APPROACH_SCHEMA = {
                 "subject_hint": {"type": "string"},
                 "body_hint": {"type": "string"},
                 "rationale": {"type": "string"},
+                "recommended_channel": {
+                    "type": "string",
+                    "enum": ["email", "li_dm", "ig_dm", "fb_dm", "phone", ""],
+                },
+                "channel_rationale": {"type": "string"},
             },
-            "required": ["should_send", "timing_days", "tone", "subject_hint", "body_hint", "rationale"],
+            "required": [
+                "should_send", "timing_days", "tone", "subject_hint", "body_hint",
+                "rationale", "recommended_channel", "channel_rationale",
+            ],
             "additionalProperties": False,
         },
         "rejection_reasoning": {"type": "string"},
@@ -786,12 +794,35 @@ def _analysis_context_block(analysis: dict, contact_switched: bool = False) -> s
         parts.append(f"Tempistica: {plan.get('timing_days', '?')} giorni da oggi")
         if plan.get("tone"):
             parts.append(f"Tono: {plan['tone']}")
+        rec_channel = (plan.get("recommended_channel") or "").strip()
+        if rec_channel:
+            channel_human = {
+                "email": "Email",
+                "li_dm": "LinkedIn DM",
+                "ig_dm": "Instagram DM",
+                "fb_dm": "Facebook DM",
+                "phone": "Telefono (chiamata)",
+            }.get(rec_channel, rec_channel)
+            # Istruzione vincolante: l'analisi ha già valutato il canale, il drafter
+            # deve usarlo come default e adattare il formato (script per phone, DM corto).
+            parts.append(
+                f"⚠️ **CANALE CONSIGLIATO: {channel_human}** ({rec_channel}) — "
+                "USA QUESTO come `channel_suggestion` di output e adatta il formato del body "
+                "secondo le regole del FORMATO PER CANALE nel task. "
+                + ("Per phone: produci uno SCRIPT di chiamata, NON una mail. "
+                   if rec_channel == "phone" else "")
+                + ("Per DM: subject vuoto, body 60-150 parole conversazionali, niente firma. "
+                   if rec_channel in ("li_dm", "ig_dm", "fb_dm") else "")
+            )
+        if plan.get("channel_rationale"):
+            parts.append(f"Perché questo canale: {plan['channel_rationale']}")
         if plan.get("subject_hint"):
-            parts.append(f"Oggetto suggerito: «{plan['subject_hint']}»")
+            parts.append(f"Oggetto suggerito: «{plan['subject_hint']}» "
+                          "(vuoto/da ignorare se canale ≠ email)")
         if plan.get("body_hint"):
             parts.append(f"Angolo / elemento nuovo da introdurre:\n{plan['body_hint']}")
         if plan.get("rationale"):
-            parts.append(f"Motivazione: {plan['rationale']}")
+            parts.append(f"Motivazione complessiva: {plan['rationale']}")
 
     return "\n".join(parts)
 

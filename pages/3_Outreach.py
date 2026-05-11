@@ -1,6 +1,7 @@
 """Outreach — chat per venue. Genera mail, incolla risposte, aggiorna stato."""
 from __future__ import annotations
 
+import json
 import subprocess
 import time
 from datetime import date, datetime
@@ -91,10 +92,14 @@ def build_draft_markdown(
     body: str,
     attachments: list[dict],
     contact: dict | None = None,
+    pending_attachment_specs: list[dict] | None = None,
 ) -> str:
-    """Esporta il draft corrente come markdown. Se ci sono allegati selezionati,
-    li mostra in un callout finale con filename in **grassetto** — serve come
-    promemoria forte quando si copia/incolla la mail in Aruba."""
+    """Esporta il draft corrente come markdown. Tre callout possibili in coda:
+    - **DA ALLEGARE ALL'INVIO**: file già in libreria che vanno spediti ora.
+    - **MATERIALI DA CREARE PRIMA DI INVIARE**: spec strutturate (title, kind,
+      audience, outline, talking points) per slide/workshop/scheda caso che
+      l'LLM ha proposto nel body ma che NON esistono come PDF ancora.
+    L'utente legge il .md fuori dall'app → script di costruzione veloce."""
     lines: list[str] = []
     lines.append(f"# {subject or '(senza oggetto)'}")
     lines.append("")
@@ -127,6 +132,43 @@ def build_draft_markdown(
         for a in attachments:
             fn = a.get("filename") or "(senza nome)"
             lines.append(f"> - **{fn}**")
+    if pending_attachment_specs:
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("## 📋 MATERIALI DA CREARE PRIMA DI INVIARE")
+        lines.append("")
+        lines.append(
+            "_Materiali che la mail menziona come allegati ma che non esistono ancora "
+            "come PDF in libreria. Costruiscili veloci seguendo le spec qui sotto, "
+            "poi caricali e collegali alla mail prima dell'invio._"
+        )
+        for i, spec in enumerate(pending_attachment_specs, 1):
+            lines.append("")
+            lines.append(f"### {i}. **{spec.get('title') or '(senza titolo)'}**")
+            tag_bits = []
+            if spec.get("kind"):
+                tag_bits.append(f"_{spec['kind']}_")
+            if spec.get("estimated_pages"):
+                tag_bits.append(f"~{spec['estimated_pages']} pagine/slide")
+            if spec.get("audience"):
+                tag_bits.append(f"audience: {spec['audience']}")
+            if tag_bits:
+                lines.append("  ·  ".join(tag_bits))
+            if spec.get("rationale"):
+                lines.append("")
+                lines.append(f"_Perché: {spec['rationale']}_")
+            if spec.get("content_outline"):
+                lines.append("")
+                lines.append("**Struttura/contenuti:**")
+                lines.append("")
+                lines.append(spec["content_outline"])
+            tp = spec.get("talking_points") or []
+            if tp:
+                lines.append("")
+                lines.append("**Talking points chiave:**")
+                for p in tp:
+                    lines.append(f"- {p}")
     return "\n".join(lines) + "\n"
 
 st.set_page_config(page_title="Outreach", layout="wide")
@@ -407,6 +449,16 @@ if pending_drafts and (
     or st.session_state.get("active_draft_venue_id") != venue["id"]
 ):
     pd = pending_drafts[-1]
+    # Ripristino delle spec materiali-da-creare (se la riga del draft le aveva salvate)
+    _restored_specs: list[dict] = []
+    _raw_specs = pd.get("pending_attachment_specs_json")
+    if _raw_specs:
+        try:
+            _parsed = json.loads(_raw_specs)
+            if isinstance(_parsed, list):
+                _restored_specs = _parsed
+        except (json.JSONDecodeError, TypeError):
+            _restored_specs = []
     st.session_state["active_draft"] = {
         "subject": pd.get("subject") or "",
         "body": pd.get("content") or "",
@@ -414,6 +466,7 @@ if pending_drafts and (
         "speaker_choice": "?",
         "tone": "?",
         "language": venue.get("language") or "?",
+        "attachments_to_create": _restored_specs,
     }
     st.session_state["active_draft_venue_id"] = venue["id"]
     st.session_state["active_draft_interaction_id"] = pd["id"]
@@ -683,12 +736,16 @@ with action_col1:
                 # discovery deve riflettere la versione corrente, non la prima generata.
                 pending_iid = st.session_state.get("active_draft_interaction_id")
                 if pending_iid:
+                    _specs_now = draft.get("attachments_to_create") or []
                     db.update_interaction(pending_iid, {
                         "subject": draft.get("subject"),
                         "content": draft.get("body"),
                         "llm_draft": draft.get("body"),
                         "channel": draft.get("channel_suggestion") or "email",
                         "is_draft": 1,
+                        "pending_attachment_specs_json": (
+                            json.dumps(_specs_now, ensure_ascii=False) if _specs_now else None
+                        ),
                     })
                 # Bump della versione del draft → cambia le chiavi dei widget editor,
                 # così Streamlit li ricrea da zero usando i nuovi value= (altrimenti
@@ -712,6 +769,7 @@ with action_col2:
             "speaker_choice": "?",
             "tone": "?",
             "language": venue.get("language") or "IT",
+            "attachments_to_create": [],
         }
         st.session_state["active_draft"] = empty_draft
         st.session_state["active_draft_venue_id"] = venue["id"]
@@ -847,13 +905,10 @@ if prior_outgoing > 0:
                     sig_cols[1].markdown("**⚠️ Segnali contro**\n" + "\n".join(f"- {s}" for s in neg))
 
                 if new_score and new_score != old_score:
-                    if st.button(
-                        f"Aggiorna acceptance_score della venue a {new_score}/3",
-                        key=f"btn_update_acceptance_{venue['id']}",
-                    ):
-                        db.update_venue(venue["id"], {"acceptance_score": new_score})
-                        st.toast(f"acceptance_score aggiornato a {new_score}/3", icon="✓")
-                        st.rerun()
+                    st.caption(
+                        f"💡 Il nuovo score {new_score}/3 verrà applicato automaticamente "
+                        "quando confermi l'azione (follow-up / cambio contatto / rifiuto)."
+                    )
 
         # 2. Contatto attuale: ok o no?
         is_best = bool(result.get("is_current_contact_best"))
@@ -881,6 +936,17 @@ if prior_outgoing > 0:
                     rows.append(f"- **Fonte:** [{bc['source_url']}]({bc['source_url']})")
                 if bc.get("rationale"): rows.append(f"- **Motivazione:** {bc['rationale']}")
                 st.markdown("\n".join(rows))
+
+        def _apply_fit_score_from_analysis() -> None:
+            """Aggiorna venue.acceptance_score col valore del fit_reassessment dell'analisi,
+            ma solo se è diverso dal corrente. Chiamato implicitamente quando l'utente
+            conferma un'azione primaria (follow-up, switch_contact, mark_rejected)."""
+            _f = (result.get("fit_reassessment") or {})
+            new_s = _f.get("score")
+            old_s = venue.get("acceptance_score")
+            if new_s and new_s != old_s:
+                db.update_venue(venue["id"], {"acceptance_score": new_s})
+                st.toast(f"acceptance_score aggiornato a {new_s}/3", icon="✓")
 
         # Helper canale → (emoji, label, button verb).
         # `verb` viene usato nella label del bottone (es. 'Crea follow-up via email',
@@ -911,6 +977,7 @@ if prior_outgoing > 0:
                 key=f"btn_set_rejected_{venue['id']}",
                 type="primary",
             ):
+                _apply_fit_score_from_analysis()
                 db.update_venue(venue["id"], {"pipeline_status": "rifiutata"})
                 st.session_state.pop(analysis_key, None)
                 st.rerun()
@@ -1004,6 +1071,9 @@ if prior_outgoing > 0:
                     ),
                 ):
                     try:
+                        # 0) Auto-apply: acceptance_score dal fit_reassessment dell'analisi.
+                        _apply_fit_score_from_analysis()
+
                         # 1) Backfill NULL → contatto attuale
                         if _cur_contact:
                             n_back = db.backfill_null_contact_for_venue(
@@ -1124,10 +1194,14 @@ if prior_outgoing > 0:
                 type="primary",
                 help=(
                     "Genera il draft iniettando subito nel prompt il piano (canale, "
-                    "oggetto, angolo, tono) emerso dall'analisi. Le info one-shot non "
-                    "vengono salvate: solo il summary già nelle note resta a lungo termine."
+                    "oggetto, angolo, tono) emerso dall'analisi. Applica anche in modo "
+                    "implicito l'acceptance_score aggiornato dal fit reassessment."
                 ),
             ):
+                # Auto-apply: prima di lanciare l'LLM aggiorna acceptance_score se diverso.
+                # L'utente non deve cliccare un secondo bottone — è un effetto collaterale
+                # naturale del confermare l'azione consigliata.
+                _apply_fit_score_from_analysis()
                 with st.spinner("Generazione draft con LLM (con context dell'analisi)..."):
                     try:
                         last_received_now = next(
@@ -1290,12 +1364,16 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
                         # la riscrittura va persistita subito così l'export .md vede la nuova versione.
                         pending_iid = st.session_state.get("active_draft_interaction_id")
                         if pending_iid:
+                            _specs_refined = new_draft.get("attachments_to_create") or []
                             db.update_interaction(pending_iid, {
                                 "subject": new_draft.get("subject"),
                                 "content": new_draft.get("body"),
                                 "llm_draft": new_draft.get("body"),
                                 "channel": new_draft.get("channel_suggestion") or "email",
                                 "is_draft": 1,
+                                "pending_attachment_specs_json": (
+                                    json.dumps(_specs_refined, ensure_ascii=False) if _specs_refined else None
+                                ),
                             })
                         st.session_state["active_draft_version"] = (
                             st.session_state.get("active_draft_version", 0) + 1
@@ -1401,6 +1479,38 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
                         st.session_state[sel_key].remove(a["id"])
                     st.rerun()
 
+    # Materiali "da creare prima di inviare" — output strutturato del drafter LLM.
+    # Sono i deck / proposte workshop / case study che la mail dichiara come allegati
+    # ma che NON sono ancora un file in libreria: l'utente deve crearli prima dell'invio.
+    pending_specs = list(draft.get("attachments_to_create") or [])
+    if pending_specs:
+        with st.container(border=True):
+            st.markdown(
+                "### 📋 Materiali da creare prima di inviare"
+            )
+            st.caption(
+                "L'LLM ha menzionato nel body questi materiali come già allegati "
+                "(linea ferma — vedi §16.4 linee guida). Costruiscili veloci con le "
+                "spec qui sotto, poi caricali in libreria e collegali prima di confermare."
+            )
+            for i, spec in enumerate(pending_specs, 1):
+                _kind = spec.get("kind") or "altro"
+                _title = spec.get("title") or "(senza titolo)"
+                with st.expander(f"{i}. **{_title}** — _{_kind}_", expanded=(i == 1)):
+                    if spec.get("audience"):
+                        st.markdown(f"**Audience:** {spec['audience']}")
+                    if spec.get("estimated_pages"):
+                        st.markdown(f"**Dimensione stimata:** ~{spec['estimated_pages']} pagine/slide")
+                    if spec.get("rationale"):
+                        st.markdown(f"**Perché allegarlo:** {spec['rationale']}")
+                    if spec.get("content_outline"):
+                        st.markdown("**Struttura/contenuti:**")
+                        st.markdown(spec["content_outline"])
+                    tp = spec.get("talking_points") or []
+                    if tp:
+                        st.markdown("**Talking points chiave:**")
+                        st.markdown("\n".join(f"- {p}" for p in tp))
+
     # Allegati selezionati per questa mail (chips visibili nel draft)
     selected_ids_now = list(st.session_state.get(sel_key, []))
     if selected_ids_now:
@@ -1430,6 +1540,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
         body=edited_body,
         attachments=_md_atts,
         contact=_md_contact,
+        pending_attachment_specs=pending_specs,
     )
     _md_filename = f"mail_{_slugify(venue.get('name') or 'venue')}_{date.today().isoformat()}.md"
     st.download_button(
@@ -1470,6 +1581,10 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
         effective_contact_id = forced_cid or (
             contact_for_draft["id"] if contact_for_draft else None
         )
+        # Persistiamo le spec dei materiali "da creare prima di inviare" come JSON
+        # sull'interaction: restano legate alla singola mail anche dopo l'invio,
+        # così l'utente può ricostruire cosa aveva promesso di allegare.
+        _specs_json = json.dumps(pending_specs, ensure_ascii=False) if pending_specs else None
         if pending_iid:
             # Conferma del draft esistente: aggiorna la riga, togli il flag draft.
             _upd = {
@@ -1480,6 +1595,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
                 "content": edited_body,
                 "is_draft": 0,
                 "speaker_choice": draft.get("speaker_choice"),
+                "pending_attachment_specs_json": _specs_json,
             }
             # Quando arriviamo da uno switch_contact, sovrascriviamo anche il
             # contact_id del draft pending (era stato salvato col vecchio referente).
@@ -1499,6 +1615,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
                 "content": edited_body,
                 "llm_draft": draft.get("body") if edited_body != draft.get("body") else None,
                 "speaker_choice": draft.get("speaker_choice"),
+                "pending_attachment_specs_json": _specs_json,
             })
         # Persisti la selezione allegati e ricorda all'utente di allegarli su Aruba
         selected_ids_save = list(st.session_state.get(sel_key, []))

@@ -399,6 +399,16 @@ def init_db() -> None:
             conn.execute("ALTER TABLE interactions ADD COLUMN speaker_choice TEXT")
         except sqlite3.OperationalError:
             pass
+        # JSON con la lista di materiali "da creare prima di inviare" suggeriti dall'LLM
+        # (proposte workshop, schede caso, deck custom). Spec strutturate: title, kind,
+        # audience, content_outline, talking_points, estimated_pages, rationale.
+        # Restano legate all'interaction perché sono coerenti col body di QUELLA mail.
+        try:
+            conn.execute(
+                "ALTER TABLE interactions ADD COLUMN pending_attachment_specs_json TEXT"
+            )
+        except sqlite3.OperationalError:
+            pass
         try:
             conn.execute(
                 "ALTER TABLE venues ADD COLUMN organizer_id INTEGER REFERENCES organizers(id) ON DELETE SET NULL"
@@ -991,7 +1001,7 @@ def list_orphan_venues(filters: Optional[dict] = None) -> list[dict]:
 INTERACTION_FIELDS = [
     "occurred_at", "channel", "direction", "venue_id", "contact_id",
     "type", "subject", "content", "llm_draft", "pipeline_status_after",
-    "is_draft", "speaker_choice",
+    "is_draft", "speaker_choice", "pending_attachment_specs_json",
 ]
 
 

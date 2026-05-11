@@ -314,6 +314,41 @@ def contact_cross_venue_history_block(contact: Optional[dict], interactions: lis
 
 # --------- Task prompts ----------
 
+ATTACHMENTS_DECISION_RULES = """# ALLEGATI E MATERIALI DA INVIARE — REGOLE CONDIVISE
+
+Quando proponi nel body l'invio di un materiale (slide, deck, proposta di workshop, scheda caso, brochure, documento custom), valgono DUE regole obbligatorie:
+
+## R1. Dichiarazione ferma (§16.4 linee guida)
+Nel body usa l'**indicativo presente come fatto compiuto**, mai il condizionale o l'offerta esitante.
+- ✅ «Allego la proposta del workshop "Storytelling AI per PMI"», «In allegato la scheda del caso azienda cliente», «Ti mando in giornata il deck con 3 esempi del nostro intervento».
+- ❌ «Se le interessa posso preparare una proposta di workshop…», «Volentieri le invierei una scheda…», «Le mando il deck nel caso volesse approfondire…».
+
+Vale anche per i materiali che NON esistono ancora come file: la decisione di crearli e inviarli è nostra, e la mail li dichiara come allegati. L'utente vedrà la spec di cosa creare e produrrà il PDF prima di spedire.
+
+## R2. Spec dei materiali da creare (`attachments_to_create`)
+Per OGNI materiale nominato nel body che NON è già in `ALLEGATI DA INCLUDERE IN QUESTA MAIL` (cioè non è un file già caricato in libreria), aggiungilo a `attachments_to_create` con questi campi:
+
+- `title`: titolo specifico del materiale (es. "Proposta workshop AI per PMI manifatturiere", "Scheda caso newsletter automation").
+- `kind`: tipo (`slide` | `workshop` | `proposta_workshop` | `case_study` | `brochure` | `scheda_caso` | `presentazione` | `documento` | `altro`).
+- `audience`: chi lo leggerà (es. "Direttore programmazione hub innovazione", "Comitato scientifico associazione").
+- `content_outline`: 4-8 righe markdown che descrivono **sezioni e contenuti** del materiale, così l'utente capisce in 30 sec cosa creare. Usa bullet con sotto-bullet se serve. Esempio:
+  ```
+  - Apertura: il problema specifico della loro audience (1 slide)
+  - Caso applicato: come Stefano ha risolto X presso azienda cliente (2 slide)
+  - Workshop hands-on: 3 esercizi di 20 minuti ciascuno (3 slide)
+  - Take-away misurabili (1 slide)
+  ```
+  Solo contenuti coerenti coi profili speaker — niente sezioni che richiederebbero claim non supportati.
+- `talking_points`: 3-6 bullet con i messaggi chiave che il materiale deve veicolare, parafrasabili in 1 riga ciascuno. Es. "L'AI generativa funziona quando aderisce al brand storytelling, non quando lo sostituisce".
+- `estimated_pages`: stima pagine/slide (0 se non applicabile, es. per script audio).
+- `rationale`: 1-2 frasi su perché allegare proprio QUESTO materiale a QUESTA venue (collegamento col loro contesto/fit).
+
+Se non proponi alcun materiale nel body → `attachments_to_create: []` (lista vuota, obbligatoria nello schema).
+
+NON inserire in `attachments_to_create` gli allegati che il context mostra come "ALLEGATI DA INCLUDERE IN QUESTA MAIL": quelli sono già file pronti in libreria, vanno menzionati nel body (con dichiarazione ferma) ma non duplicati nello spec.
+"""
+
+
 CHANNEL_FORMAT_RULES = """# FORMATO PER CANALE — REGOLE CONDIVISE
 
 Il `channel_suggestion` di output determina il formato del body e del subject. Se il context include una raccomandazione esplicita di canale (es. blocco analisi outreach con `recommended_channel`, oppure parametro `CANALE PRESCRITTO` nel prompt), **usalo come default** e adatta il formato di conseguenza.
@@ -372,7 +407,8 @@ Output JSON con questo schema esatto:
   "speaker_choice": "Luca|Stefano|entrambi",
   "tone": "formale|cordiale|informale|tecnico",
   "language": "IT|EN|DE",
-  "rationale": "1-2 frasi su perché questa scelta di angolo/speaker/tono"
+  "rationale": "1-2 frasi su perché questa scelta di angolo/speaker/tono",
+  "attachments_to_create": "[] se non proponi materiali nuovi nel body; altrimenti lista di spec secondo ATTACHMENTS_DECISION_RULES sopra"
 }
 
 Vincoli:
@@ -400,6 +436,7 @@ Per il follow-up via email il body è **più breve dell'originale**: 80-180 paro
 
 # OUTPUT JSON
 {
+  "attachments_to_create": "[] se non proponi materiali nuovi; altrimenti lista di spec secondo ATTACHMENTS_DECISION_RULES sopra",
   "timing_suggestion_days": 7,
   "should_send": true,
   "subject": "oggetto del follow-up (vuoto se canale non è email)",

@@ -138,6 +138,30 @@ def _log_llm_call(
 
 # ----- Schemas for structured outputs -----
 
+ATTACHMENT_TO_CREATE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "title": {"type": "string"},
+        "kind": {
+            "type": "string",
+            "enum": [
+                "slide", "workshop", "proposta_workshop", "case_study",
+                "brochure", "scheda_caso", "presentazione", "documento", "altro",
+            ],
+        },
+        "audience": {"type": "string"},
+        "content_outline": {"type": "string"},
+        "talking_points": {"type": "array", "items": {"type": "string"}},
+        "estimated_pages": {"type": "integer"},
+        "rationale": {"type": "string"},
+    },
+    "required": [
+        "title", "kind", "audience", "content_outline", "talking_points",
+        "estimated_pages", "rationale",
+    ],
+    "additionalProperties": False,
+}
+
 DRAFT_FIRST_EMAIL_SCHEMA = {
     "type": "object",
     "properties": {
@@ -148,8 +172,15 @@ DRAFT_FIRST_EMAIL_SCHEMA = {
         "tone": {"type": "string", "enum": ["formale", "cordiale", "informale", "tecnico"]},
         "language": {"type": "string", "enum": ["IT", "EN", "DE"]},
         "rationale": {"type": "string"},
+        "attachments_to_create": {
+            "type": "array",
+            "items": ATTACHMENT_TO_CREATE_SCHEMA,
+        },
     },
-    "required": ["subject", "body", "channel_suggestion", "speaker_choice", "tone", "language", "rationale"],
+    "required": [
+        "subject", "body", "channel_suggestion", "speaker_choice", "tone",
+        "language", "rationale", "attachments_to_create",
+    ],
     "additionalProperties": False,
 }
 
@@ -162,8 +193,15 @@ DRAFT_FOLLOW_UP_SCHEMA = {
         "body": {"type": "string"},
         "channel_suggestion": {"type": "string", "enum": ["email", "li_dm", "ig_dm", "fb_dm", "phone"]},
         "rationale": {"type": "string"},
+        "attachments_to_create": {
+            "type": "array",
+            "items": ATTACHMENT_TO_CREATE_SCHEMA,
+        },
     },
-    "required": ["timing_suggestion_days", "should_send", "subject", "body", "channel_suggestion", "rationale"],
+    "required": [
+        "timing_suggestion_days", "should_send", "subject", "body",
+        "channel_suggestion", "rationale", "attachments_to_create",
+    ],
     "additionalProperties": False,
 }
 
@@ -680,6 +718,7 @@ def build_draft_first_email_prompt(
     prescribed = _prescribed_channel_block(recommended_channel)
     if prescribed:
         parts.append(prescribed)
+    parts.append(prompts.ATTACHMENTS_DECISION_RULES)
     parts.append(prompts.CHANNEL_FORMAT_RULES)
     parts.append(prompts.DRAFT_FIRST_EMAIL_TASK)
     return "\n\n".join(parts)
@@ -717,9 +756,13 @@ Regole:
 - Se il feedback è contraddittorio col profilo speaker o col profilo progetto, segui il feedback dell'utente (è il suo testo, decide lui) ma annota la tensione nel `rationale`.
 - NON re-introdurre cose che l'utente ha esplicitamente chiesto di togliere in turni precedenti (vedi storia conversazione).
 - Mantieni `speaker_choice`, `tone`, `language`, `channel_suggestion` se non chiesti esplicitamente diversi.
+- `attachments_to_create`: deve restare COERENTE col body riscritto.
+  - Se il feedback toglie un materiale dal body (es. "togli il riferimento al workshop"), rimuovi la spec corrispondente.
+  - Se il feedback aggiunge un materiale (es. "menziona anche una scheda caso"), aggiungi una spec con title/kind/outline/talking_points secondo le ATTACHMENTS_DECISION_RULES.
+  - Se il body resta concettualmente uguale, ripeti le stesse spec della versione precedente (NON reinventarle daccapo).
 - `rationale`: 1-2 frasi su cosa hai cambiato rispetto alla versione precedente.
 
-Output JSON con lo stesso schema della prima generazione (subject, body, channel_suggestion, speaker_choice, tone, language, rationale)."""
+Output JSON con lo stesso schema della prima generazione (subject, body, channel_suggestion, speaker_choice, tone, language, rationale, attachments_to_create)."""
 
 
 def refine_first_email(
@@ -743,7 +786,12 @@ def refine_first_email(
 
     user_text = "\n\n".join(
         _build_draft_context_blocks(venue, contact, selected_attachment_ids)
-        + ["\n".join(history_text_parts), REFINE_DRAFT_TASK]
+        + [
+            prompts.ATTACHMENTS_DECISION_RULES,
+            prompts.CHANNEL_FORMAT_RULES,
+            "\n".join(history_text_parts),
+            REFINE_DRAFT_TASK,
+        ]
     )
     return _call_json(
         system_blocks=_build_system_blocks(speakers, profile, include_email_guidelines=True),
@@ -941,6 +989,7 @@ def draft_follow_up(
         prescribed = _prescribed_channel_block(_rec_chan)
         if prescribed:
             parts.append(prescribed)
+    parts.append(prompts.ATTACHMENTS_DECISION_RULES)
     parts.append(prompts.CHANNEL_FORMAT_RULES)
     parts.append(prompts.DRAFT_FOLLOW_UP_TASK)
     user_text = "\n\n".join(parts)

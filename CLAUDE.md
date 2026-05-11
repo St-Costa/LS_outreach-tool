@@ -15,7 +15,8 @@ Stato: MVP completo (9/9 punti spec aprile 2026). Fase 2 = 0/4 (vedi [docs/legac
 - Python 3.12, venv locale in `venv/`
 - `streamlit>=1.36` · `anthropic>=0.40` · `folium>=0.16` · `streamlit-folium>=0.20`
 - `pandas>=2.0` · `requests>=2.31` · `python-dateutil>=2.8` · `cryptography>=42.0`
-- Modello LLM: `claude-sonnet-4-6` ([lib/claude.py:16](lib/claude.py#L16))
+- Modello LLM principale: `claude-sonnet-4-6` ([lib/claude.py:18](lib/claude.py#L18))
+- Modello LLM secondario: `claude-haiku-4-5-20251001` ([lib/claude.py:19](lib/claude.py#L19)) usato per task brevi/economici — vedi gotcha #3
 - Web search tool: `web_search_20250305` (versione scelta per evitare bug `pause_turn`)
 
 ## Comandi
@@ -70,7 +71,7 @@ Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata
 - `from __future__ import annotations` in tutti i file Python
 - Type hints PEP 484 completi
 - `@dataclass` ok, **no pydantic**
-- DB access: sempre via context manager [`db.transaction()`](lib/db.py#L181)
+- DB access: sempre via context manager [`db.transaction()`](lib/db.py#L245)
 - Logging: `st.success/error/toast` (UI) + file `data/streamlit.log`. **No `logging` library**
 - Errori: `try/except` espliciti con messaggi user-facing in `st.error`
 - Niente test framework: `tests/test_*.py` sono script eseguibili
@@ -79,23 +80,27 @@ Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata
 
 1. **API key**: cifrata Fernet in tabella `settings`, master key in `~/.config/outreach/master.key` (perms 0o600). **NO `.env`, NO env var, NO `st.secrets`**. Vedi [lib/settings.py](lib/settings.py). Recovery se persa → vedi [docs/OPERATIONS.md](docs/OPERATIONS.md).
 
-2. **Pipeline a 5 stati** (non 8 come spec): `da_contattare, contattata, accettata, rifiutata, ghostati`. Stati legacy mappati automaticamente in `init_db()` ([lib/db.py:247](lib/db.py#L247)) e `pipeline.normalize_state()`.
+2. **Pipeline a 5 stati** (non 8 come spec): `da_contattare, contattata, accettata, rifiutata, ghostati`. Stati legacy mappati automaticamente nella migrazione di `init_db()` ([lib/db.py:443-471](lib/db.py#L443-L471)) e in `pipeline.normalize_state()`.
 
-3. **Modello LLM e prompt caching**: `claude-sonnet-4-6`. System block ha `cache_control: ephemeral` sull'ultimo blocco (speakers) → cache hit entro ~5 min ([lib/claude.py:189-203](lib/claude.py#L189-L203)). Tutte le call usano `output_config.format=json_schema` per output strutturato.
+3. **Modelli LLM e prompt caching**: due modelli affiancati.
+   - `claude-sonnet-4-6` ([lib/claude.py:18](lib/claude.py#L18)) per draft/follow-up/analisi/discovery (default).
+   - `claude-haiku-4-5-20251001` ([lib/claude.py:19](lib/claude.py#L19)) per task brevi: `enrich_venue`, `suggest_channel`, `analyze_response` (mapping in [lib/claude.py:32-34](lib/claude.py#L32-L34)).
+   - Prompt caching: i system block hanno **due** breakpoint `cache_control: ephemeral` (project profile a [lib/claude.py:490](lib/claude.py#L490) e speakers a [lib/claude.py:497](lib/claude.py#L497)) → cache hit entro ~5 min. Non rimuovere il primo pensando che basti l'ultimo.
+   - Tutte le call usano `output_config.format=json_schema` per output strutturato.
 
-4. **Discovery web search**: tool `web_search_20250305` (NON le versioni più nuove con `dynamic filtering` per evitare bug `container_id` su `pause_turn`). Loop `pause_turn` fino a 10 round, max 24k token per round, fino a 300 search totali. Vedi [lib/claude.py:534-614](lib/claude.py#L534-L614).
+4. **Discovery web search**: tool `web_search_20250305` (NON le versioni più nuove con `dynamic filtering` per evitare bug `container_id` su `pause_turn`). Loop `pause_turn` fino a 10 round, max 24k token per round, fino a 300 search totali. Vedi `discover_venues()` a partire da [lib/claude.py:1323](lib/claude.py#L1323) (loop pause_turn a [lib/claude.py:1427-1440](lib/claude.py#L1427-L1440)).
 
 5. **`is_draft` flag su `interactions`**: i draft pending non confermati vanno **esclusi** da: count outgoing, history nel context LLM, last_outgoing per follow-up. Pattern: `COALESCE(is_draft, 0) = 0` in SQL, filtro `not (it["direction"] == "inviata" and it["is_draft"])` in Python. Senza questo l'LLM crede che la mail sia stata inviata.
 
-6. **Streamlit pages**: ordine numerico nei filename pilota la sidebar. `3_Outreach.py` è "hidden" via CSS in [lib/ui.py](lib/ui.py) — si apre solo settando `st.session_state["draft_venue_id"]` da `1_Venue.py`.
+6. **Streamlit pages**: ordine numerico nei filename pilota la sidebar. `3_Outreach.py` è "hidden" via CSS in [lib/ui.py:41-44](lib/ui.py#L41-L44) — si apre solo settando `st.session_state["draft_venue_id"]` da `1_Venue.py`.
 
 7. **`.streamlit/` è ignorato da git** (incluso `config.toml` non solo `secrets.toml`). Se devi modificare config Streamlit, ricordati che non viene versionato.
 
 8. **Linee guida email**: lette **fresh ad ogni call LLM** da `email_guidelines.md` (vedi `prompts.email_drafting_guidelines()`). Modificare il file ha effetto immediato senza restart.
 
-9. **Timestamp SQLite**: gestiti come stringhe (`detect_types` disabilitato) perché Python 3.12 ha un converter `TIMESTAMP` strict che esplode su ISO-8601 con `T`. Parse esplicito con `datetime.fromisoformat()`. Vedi [lib/db.py:172-174](lib/db.py#L172-L174).
+9. **Timestamp SQLite**: gestiti come stringhe (`detect_types` disabilitato) perché Python 3.12 ha un converter `TIMESTAMP` strict che esplode su ISO-8601 con `T`. Parse esplicito con `datetime.fromisoformat()`. Vedi commento a [lib/db.py:232](lib/db.py#L232).
 
-10. **`organizers` aggiunti post-spec**: rappresentano enti madre (Rotary, Lions, atenei) che ospitano più venue. Le venue figlie hanno `organizer_id` FK; il dossier LLM include "venue sorelle" via `_organizer_context_for_venue()` ([lib/claude.py:292](lib/claude.py#L292)).
+10. **`organizers` aggiunti post-spec**: rappresentano enti madre (Rotary, Lions, atenei) che ospitano più venue. Le venue figlie hanno `organizer_id` FK; il dossier LLM include "venue sorelle" via `_organizer_context_for_venue()` ([lib/claude.py:651](lib/claude.py#L651)).
 
 11. **Marker `[Da discovery {run_id}]` nelle note venue**: lega le venue create al run di origine senza FK formale. Usato da `get_mails_for_discovery_run()` per export bulk. Non rimuovere il marker.
 
@@ -115,7 +120,7 @@ Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata
 
 - **Commit dopo ogni modifica**: al termine di ogni intervento (anche piccolo) fai un commit autonomamente, senza chiedere conferma. Messaggio in italiano, conciso, focalizzato sul "perché". Un commit per task logico — non accumulare modifiche scollegate. Mai `git push` senza richiesta esplicita.
 - **Prima di proporre modifiche allo schema**: leggere `docs/SCHEMA.md` per il contesto delle migrazioni legacy.
-- **Prima di toccare il flusso draft email**: capire il pattern `is_draft` (gotcha #5) e i blocchi context in `_build_draft_context_blocks` ([lib/claude.py:256](lib/claude.py#L256)).
+- **Prima di toccare il flusso draft email**: capire il pattern `is_draft` (gotcha #5) e i blocchi context in `_build_draft_context_blocks` ([lib/claude.py:569](lib/claude.py#L569)). Il filtro dei draft pending è centralizzato in `pipeline.is_confirmed_outgoing()`.
 - **Per testare modifiche** che toccano DB: `python tests/test_importer.py` usa un DB temporaneo `/tmp/outreach_test.db`, non sporca il database reale.
 - **Mai committare**: la master key, file in `data/backups/`, `data/outreach.db`, `data/streamlit.log`.
 - **Quando modifichi pagine Streamlit**: il browser richiede un refresh manuale o un `st.rerun()` esplicito; il server fa hot-reload sui file Python ma session_state persiste.

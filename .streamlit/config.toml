@@ -1,0 +1,12 @@
+[client]
+toolbarMode = "minimal"
+showErrorDetails = true
+
+[browser]
+gatherUsageStats = false
+
+[runner]
+magicEnabled = true
+
+[theme]
+base = "dark"

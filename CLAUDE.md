@@ -94,7 +94,7 @@ Stati pipeline (ridotti da 8 a 5 vs spec): `da_contattare, contattata, accettata
 
 6. **Streamlit pages**: ordine numerico nei filename pilota la sidebar. `3_Outreach.py` è "hidden" via CSS in [lib/ui.py:41-44](lib/ui.py#L41-L44) — si apre solo settando `st.session_state["draft_venue_id"]` da `1_Venue.py`.
 
-7. **`.streamlit/` è ignorato da git** (incluso `config.toml` non solo `secrets.toml`). Se devi modificare config Streamlit, ricordati che non viene versionato.
+7. **`.streamlit/`**: solo `.streamlit/secrets.toml` è gitignored. `.streamlit/config.toml` è versionato (theme dark, toolbar minimale, no usage stats). Se aggiungi file in `.streamlit/`, valuta se vanno in repo o esclusi singolarmente.
 
 8. **Linee guida email**: lette **fresh ad ogni call LLM** da `email_guidelines.md` (vedi `prompts.email_drafting_guidelines()`). Modificare il file ha effetto immediato senza restart.
 

@@ -9,6 +9,5 @@ data/outreach.db-shm
 data/backups/
 data/attachments/
 .streamlit/secrets.toml
-.streamlit/
 .DS_Store
 *.log

@@ -13,10 +13,26 @@ db.init_db()
 st.title("Contatti")
 st.caption("Persone con cui si comunica. Un contatto può essere collegato a più venue.")
 
+# Breadcrumb di ritorno (impostato dal chiamante via session_state["return_to"])
+_return_to = st.session_state.get("return_to")
+if isinstance(_return_to, dict) and _return_to.get("page"):
+    if st.button(f"← Torna a {_return_to.get('label', _return_to['page'])}", key="btn_return_to_contatti"):
+        target = _return_to["page"]
+        st.session_state.pop("return_to", None)
+        st.switch_page(target)
+
+
+# Apertura mirata a un contatto specifico (es. link dalla pagina Outreach).
+# Va applicata PRIMA del render dei widget perché manipola le rispettive session_state key.
+_focus_contact_id = st.session_state.pop("contact_focus_id", None)
+if _focus_contact_id:
+    st.session_state["contacts_search"] = ""
+    st.session_state["contacts_filter_venue"] = None
+    st.session_state["contacts_detail_select"] = _focus_contact_id
 
 col1, col2 = st.columns(2)
 with col1:
-    f_search = st.text_input("Cerca", placeholder="nome, email, ruolo...")
+    f_search = st.text_input("Cerca", placeholder="nome, email, ruolo...", key="contacts_search")
 with col2:
     venues_all = db.list_venues()
     venue_options = [None] + [v["id"] for v in venues_all]
@@ -24,6 +40,7 @@ with col2:
         "Filtro venue",
         options=venue_options,
         format_func=lambda i: "(tutte)" if i is None else next(v["name"] for v in venues_all if v["id"] == i),
+        key="contacts_filter_venue",
     )
 
 filters: dict = {}
@@ -87,6 +104,7 @@ if contacts:
         format_func=lambda i: "—" if i is None else next(
             r["Nome"] for r in rows if r["id"] == i
         ),
+        key="contacts_detail_select",
     )
 else:
     selected_id = None

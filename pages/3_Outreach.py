@@ -263,22 +263,28 @@ with header_col2:
 contacts = db.get_contacts_for_venue(venue["id"])
 contact_for_draft = contacts[0] if contacts else None
 if contacts:
-    chips = []
-    for c in contacts:
+    # Bottoni cliccabili che aprono il contatto specifico nella pagina Contatti.
+    # Streamlit non supporta link cross-page nel markdown: serve un button reale.
+    st.markdown("👥 **Contatti:**")
+    cols = st.columns(max(len(contacts), 4))
+    for idx, c in enumerate(contacts):
         label = (
             " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip()
             or c.get("email")
             or "(senza nome)"
         )
-        role = f" · _{c['role']}_" if c.get("role") else ""
-        if c.get("email"):
-            chip = f"[**{label}**](mailto:{c['email']}){role}"
-        elif c.get("social_linkedin"):
-            chip = f"[**{label}**]({c['social_linkedin']}){role}"
-        else:
-            chip = f"**{label}**{role}"
-        chips.append(chip)
-    st.markdown("👥 " + "  ·  ".join(chips))
+        role = f" · {c['role']}" if c.get("role") else ""
+        if cols[idx].button(
+            f"{label}{role}",
+            key=f"open_contact_{c['id']}",
+            use_container_width=True,
+            help="Apri scheda contatto",
+        ):
+            st.session_state["contact_focus_id"] = c["id"]
+            st.session_state["return_to"] = {
+                "page": "pages/3_Outreach.py", "label": "Outreach",
+            }
+            st.switch_page("pages/2_Contatti.py")
 else:
     st.caption("Nessun contatto collegato. La mail userà l'email generica della venue.")
 

@@ -179,6 +179,10 @@ if edit_id:
         ev_tags_text = st.text_input("Tag (separati da virgola)", value=", ".join(tags_current))
 
         if st.form_submit_button("Salva modifiche"):
+            err = ui.validate_email_or_blank(ev_email) or ui.validate_website_or_blank(ev_website)
+            if err:
+                st.error(err)
+                st.stop()
             db.update_venue(venue["id"], {
                 "name": ev_name.strip(),
                 "email": ev_email or None,
@@ -335,8 +339,11 @@ if st.session_state.get("show_new_venue_form"):
         nv_notes = st.text_area("Note", height=120)
         col_save, col_cancel = st.columns(2)
         if col_save.form_submit_button("Crea", type="primary"):
-            if not nv_name.strip():
-                st.error("Il nome è obbligatorio.")
+            err = (
+                None if nv_name.strip() else "Il nome è obbligatorio."
+            ) or ui.validate_email_or_blank(nv_email) or ui.validate_website_or_blank(nv_website)
+            if err:
+                st.error(err)
             else:
                 db.insert_venue({
                     "name": nv_name.strip(),

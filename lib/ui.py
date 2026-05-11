@@ -7,7 +7,37 @@ ridotta, e la regola che **nasconde la pagina Outreach dal menu sidebar**
 """
 from __future__ import annotations
 
+import re
+
 import streamlit as st
+
+
+_EMAIL_RE = re.compile(r"^[^\s@]+@[^\s@]+\.[^\s@]+$")
+_URL_RE = re.compile(r"^https?://[^\s/$.?#].[^\s]*$", re.IGNORECASE)
+
+
+def validate_email_or_blank(value: str) -> str | None:
+    """Ritorna None se valido (anche se vuoto), altrimenti un messaggio d'errore in italiano."""
+    v = (value or "").strip()
+    if not v:
+        return None
+    if not _EMAIL_RE.match(v):
+        return f"Email non valida: «{v}». Atteso formato `nome@dominio.tld`."
+    return None
+
+
+def validate_website_or_blank(value: str) -> str | None:
+    """Ritorna None se valido (anche se vuoto), altrimenti un messaggio d'errore in italiano.
+
+    Richiede schema http(s) esplicito: evita typo del tipo `www.foo.it` senza schema
+    che poi rompono i link cliccabili nell'UI/export.
+    """
+    v = (value or "").strip()
+    if not v:
+        return None
+    if not _URL_RE.match(v):
+        return f"URL non valido: «{v}». Atteso schema esplicito, es. `https://www.dominio.it`."
+    return None
 
 
 _GLOBAL_CSS = """

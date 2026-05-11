@@ -76,6 +76,59 @@ def humanize_date(dt: datetime) -> str:
 def absolute_date(dt: datetime) -> str:
     return f"{dt.day} {ITALIAN_MONTHS[dt.month - 1]}"
 
+
+def _slugify(name: str) -> str:
+    """Sanitizza un nome per usarlo come filename. Spazi → underscore, drop chars non safe."""
+    safe = "".join(c if (c.isalnum() or c in "-_") else "_" for c in (name or "").strip())
+    while "__" in safe:
+        safe = safe.replace("__", "_")
+    return safe.strip("_") or "mail"
+
+
+def build_draft_markdown(
+    venue: dict,
+    subject: str,
+    body: str,
+    attachments: list[dict],
+    contact: dict | None = None,
+) -> str:
+    """Esporta il draft corrente come markdown. Se ci sono allegati selezionati,
+    li mostra in un callout finale con filename in **grassetto** — serve come
+    promemoria forte quando si copia/incolla la mail in Aruba."""
+    lines: list[str] = []
+    lines.append(f"# {subject or '(senza oggetto)'}")
+    lines.append("")
+    venue_label = venue.get("name") or "—"
+    if venue.get("city"):
+        venue_label += f" · {venue['city']}"
+    lines.append(f"**Venue:** {venue_label}")
+    if contact:
+        name = " ".join(filter(None, [contact.get("first_name"), contact.get("last_name")])).strip()
+        email = contact.get("email") or ""
+        if name or email:
+            who = name or "(senza nome)"
+            if email:
+                who += f" <{email}>"
+            role = f" — {contact['role']}" if contact.get("role") else ""
+            lines.append(f"**Destinatario:** {who}{role}")
+    elif venue.get("email"):
+        lines.append(f"**Destinatario:** {venue['email']}")
+    lines.append(f"**Data:** {date.today().isoformat()}")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+    lines.append(body or "")
+    if attachments:
+        lines.append("")
+        lines.append("---")
+        lines.append("")
+        lines.append("> ⚠️ **DA ALLEGARE ALL'INVIO (su Aruba):**")
+        lines.append(">")
+        for a in attachments:
+            fn = a.get("filename") or "(senza nome)"
+            lines.append(f"> - **{fn}**")
+    return "\n".join(lines) + "\n"
+
 st.set_page_config(page_title="Outreach", layout="wide")
 ui.apply_global_style()
 db.init_db()
@@ -1166,6 +1219,30 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
             st.caption(
                 "Quando confermi l'invio ti viene ricordato di allegarli su Aruba."
             )
+
+    # Download .md del draft corrente (testo già editato dall'utente + allegati selezionati
+    # come callout in grassetto). Utile per portare la mail in altri editor / archiviarla.
+    _md_atts = [db.get_attachment(aid) for aid in selected_ids_now]
+    _md_atts = [a for a in _md_atts if a]
+    md_export = build_draft_markdown(
+        venue=venue,
+        subject=edited_subject,
+        body=edited_body,
+        attachments=_md_atts,
+        contact=contact_for_draft,
+    )
+    _md_filename = f"mail_{_slugify(venue.get('name') or 'venue')}_{date.today().isoformat()}.md"
+    st.download_button(
+        "📥 Scarica mail come .md",
+        data=md_export,
+        file_name=_md_filename,
+        mime="text/markdown",
+        use_container_width=True,
+        help=(
+            "Esporta oggetto + corpo correnti in Markdown. Gli allegati selezionati "
+            "compaiono in fondo in grassetto come promemoria d'invio."
+        ),
+    )
 
     save_cols = st.columns(2)
     save_channel = save_cols[0].selectbox(

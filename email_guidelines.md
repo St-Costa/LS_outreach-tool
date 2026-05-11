@@ -665,6 +665,24 @@ Una mail di outreach **propone**: dichiara cosa offriamo, perché ha senso ora, 
 
 3. **La domanda di chiusura è organizzativa, non ipotetica.** La §15 dice "domanda sì/no concreta", ma la domanda deve riguardare un dettaglio operativo (chi è il referente, c'è una finestra in mese X, preferite scheda PDF o video) — **non** se la nostra proposta abbia senso. *"Ha senso inviare una scheda?"* è chiedere permesso. *"Vi mando la scheda con il caso della cantina trentina: a chi del team comunicazione la inoltro?"* è proporre + chiedere un dettaglio operativo.
 
+4. **Allegati: dichiarali, mai offrirli.** Quando si è deciso di includere un allegato (slide, brochure, scheda caso, workshop deck, ecc.), il body deve **dichiararlo come azione già fatta**, non come ipotesi condizionata al gradimento del destinatario. La decisione di allegare è nostra, già presa, mostrata dall'allegato stesso che è in coda alla mail.
+
+   **Vietato (chiede permesso, esita, condiziona):**
+   - *"Se le interessa posso inviarle le slide…"*
+   - *"Le lascio le slide nel caso volesse approfondire…"*
+   - *"Se vuole, in allegato trova…"*
+   - *"Volentieri allegherei…"*
+   - *"Sarei felice di condividere…"*
+   - *"Le mando in allegato qualora…"*
+
+   **Obbligato (afferma, in indicativo presente):**
+   - *"In allegato le slide del workshop X."*
+   - *"Trova in allegato la scheda del caso Y."*
+   - *"Ti lascio in allegato la brochure 2026."*
+   - *"Allego il deck con i 3 casi più simili al vostro contesto."*
+
+   Stesso registro per tutta la mail: l'indicativo presente è il modo dell'azione fatta. Mai condizionale, mai *"qualora"*, *"nel caso"*, *"se le interessa"* riferiti ai nostri allegati. Il destinatario decide se aprirli; noi decidiamo se mandarli — e l'abbiamo già fatto.
+
 **Ricapitolando:** affermare la proposta come fatta, lasciare al destinatario solo le decisioni che gli spettano davvero (referente, timing, formato di approfondimento). Mai delegare al lettore la validazione del fatto che stiamo scrivendo.
 
 ---

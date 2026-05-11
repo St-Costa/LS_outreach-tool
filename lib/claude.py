@@ -589,10 +589,14 @@ def _build_draft_context_blocks(
                 selected,
                 header="ALLEGATI DA INCLUDERE IN QUESTA MAIL",
                 intro=(
-                    "L'utente intende allegare questi file alla mail in uscita. Se il loro "
-                    "contenuto è coerente col messaggio, fai riferimento esplicito (es. "
-                    "\"in allegato trovi le slide del workshop X\") in modo che il destinatario "
-                    "sappia cosa aspettarsi. Se non aggiungono valore, non menzionarli."
+                    "Questi file vengono allegati alla mail in uscita — è una decisione "
+                    "già presa dall'utente, non un'opzione da offrire al destinatario. Nel body "
+                    "**dichiarali in indicativo presente**, mai con condizionale o frasi del tipo "
+                    "«se le interessa», «qualora volesse», «le lascio nel caso». Pattern obbligato: "
+                    "«In allegato le slide del workshop X», «Trova in allegato la scheda del caso Y», "
+                    "«Allego la brochure 2026». Vedi §16 punto 4 delle linee guida. "
+                    "Se davvero un allegato non c'entra niente col messaggio puoi non menzionarlo, "
+                    "ma se lo menzioni deve essere come fatto compiuto."
                 ),
             ))
     return blocks
@@ -820,6 +824,12 @@ def draft_follow_up(
             parts.append(prompts.attachments_block(
                 selected,
                 header="ALLEGATI DA INCLUDERE IN QUESTO FOLLOW-UP",
+                intro=(
+                    "Questi file vengono allegati al follow-up — decisione già presa, non opzione "
+                    "da offrire. **Dichiarali in indicativo presente** («In allegato le slide…», "
+                    "«Allego la scheda del caso…»), mai con condizionale o «se le interessa / qualora "
+                    "/ nel caso volesse». Vedi §16 punto 4 delle linee guida."
+                ),
             ))
     parts.append(history_text)
     if analysis_context:

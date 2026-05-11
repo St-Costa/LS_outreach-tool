@@ -191,23 +191,7 @@ if preselect_id and preselect_id in options:
 if st.session_state.get("outreach_selected_venue") not in options:
     st.session_state["outreach_selected_venue"] = options[0]
 
-with st.popover(f"📋 Conversazioni ({len(filtered)})", use_container_width=False):
-    st.multiselect(
-        "Stato",
-        options=pipeline.PIPELINE_STATES,
-        format_func=lambda s: pipeline.PIPELINE_LABELS[s],
-        key="outreach_status_filter",
-    )
-    st.text_input("Cerca", placeholder="nome, città...", key="outreach_search")
-    list_box = st.container(height=400)
-    with list_box:
-        selected_id = st.radio(
-            "Venue",
-            options=options,
-            format_func=lambda i: venue_chat_label(next(v for v in filtered if v["id"] == i), sidebar_last_map),
-            key="outreach_selected_venue",
-            label_visibility="collapsed",
-        )
+selected_id = st.session_state.get("outreach_selected_venue") or options[0]
 
 venue = db.get_venue(selected_id)
 if not venue:
@@ -279,11 +263,22 @@ with header_col2:
 contacts = db.get_contacts_for_venue(venue["id"])
 contact_for_draft = contacts[0] if contacts else None
 if contacts:
-    names = ", ".join(
-        " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or c.get("email", "")
-        for c in contacts
-    )
-    st.caption(f"Contatti: {names}")
+    chips = []
+    for c in contacts:
+        label = (
+            " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip()
+            or c.get("email")
+            or "(senza nome)"
+        )
+        role = f" · _{c['role']}_" if c.get("role") else ""
+        if c.get("email"):
+            chip = f"[**{label}**](mailto:{c['email']}){role}"
+        elif c.get("social_linkedin"):
+            chip = f"[**{label}**]({c['social_linkedin']}){role}"
+        else:
+            chip = f"**{label}**{role}"
+        chips.append(chip)
+    st.markdown("👥 " + "  ·  ".join(chips))
 else:
     st.caption("Nessun contatto collegato. La mail userà l'email generica della venue.")
 
@@ -533,7 +528,7 @@ if sel_key not in st.session_state:
 prior_outgoing = db.count_outgoing_for_venue(venue["id"])
 last_outgoing = db.get_last_outgoing_interaction(venue["id"])
 
-action_col1, action_col2 = st.columns(2)
+action_col1, action_col2, action_col3 = st.columns(3)
 
 # Se il draft attivo viene da un pending già nel db (Discovery), il bottone primario
 # diventa "Rigenera draft" — sovrascrive il contenuto via LLM mantenendo la stessa
@@ -547,7 +542,7 @@ with action_col1:
     elif prior_outgoing == 0:
         action_label = "Crea prima mail"
     else:
-        action_label = f"Crea follow-up ({prior_outgoing} mail già inviate)"
+        action_label = "Crea follow-up"
 
     if st.button(action_label, key="btn_create_mail", type="primary", use_container_width=True):
         with st.spinner("Generazione draft con LLM..."):
@@ -601,90 +596,34 @@ with action_col1:
                 st.error(f"Errore: {e}")
 
 with action_col2:
-    paste_open = st.session_state.get(f"paste_open_{venue['id']}", False)
-    if st.button("Incolla risposta ricevuta", key="btn_paste_response", use_container_width=True):
-        st.session_state[f"paste_open_{venue['id']}"] = not paste_open
+    write_label = "Scrivi prima mail" if prior_outgoing == 0 else "Scrivi follow-up"
+    if st.button(write_label, key="btn_write_mail", use_container_width=True):
+        # Draft vuoto: l'utente scrive da zero, ma può comunque chiedere a Claude
+        # di intervenire dal pannello di refinement che compare sotto.
+        empty_draft = {
+            "subject": "",
+            "body": "",
+            "channel_suggestion": "email",
+            "speaker_choice": "?",
+            "tone": "?",
+            "language": venue.get("language") or "IT",
+        }
+        st.session_state["active_draft"] = empty_draft
+        st.session_state["active_draft_venue_id"] = venue["id"]
+        st.session_state["active_draft_is_followup"] = prior_outgoing > 0
+        st.session_state["draft_refinement_history"] = [
+            {"role": "draft", "content": empty_draft}
+        ]
+        st.session_state["active_draft_version"] = (
+            st.session_state.get("active_draft_version", 0) + 1
+        )
         st.rerun()
 
-# --- Popover allegati per la prossima mail ---
-# Compatto, contestuale alla composizione (non più una "barra globale").
-# Permette upload + selezione di allegati che verranno legati alla mail in uscita.
-available_attachments = db.list_attachments(venue_id=venue["id"], include_shared=True)
-_n_sel = len(st.session_state[sel_key])
-_pop_label = (
-    f"📎 Allegati per la prossima mail ({_n_sel} selezionati)"
-    if _n_sel else "📎 Allegati per la prossima mail"
-)
-with st.popover(_pop_label, use_container_width=False):
-    st.caption(
-        "Carica/seleziona file da allegare al **prossimo messaggio in uscita**. "
-        "Verranno legati a quella specifica mail una volta confermata."
-    )
-
-    uploader_key = f"att_uploader_v{venue['id']}_{st.session_state.get('att_uploader_version', 0)}"
-    uploaded = st.file_uploader(
-        "Allega un file (PDF, immagine, doc) — l'LLM ne caricherà una volta sola il riassunto",
-        type=None,
-        accept_multiple_files=False,
-        key=uploader_key,
-    )
-    share_globally = st.checkbox(
-        "Condividi globalmente (disponibile anche per altre venue)",
-        value=True,
-        key=f"att_share_v{venue['id']}",
-    )
-    if uploaded is not None:
-        with st.spinner(f"Salvataggio e analisi LLM di {uploaded.name}…"):
-            try:
-                rec = db.save_attachment(uploaded, venue_id=None if share_globally else venue["id"])
-                try:
-                    summary = claude.summarize_attachment(rec["path"], rec["filename"], rec["mime"])
-                    db.update_attachment_summary(
-                        rec["id"], summary_json=summary, kind=summary.get("kind"),
-                    )
-                    st.success(
-                        f"{attachment_icon(rec['mime'], rec['filename'])} **{rec['filename']}** caricato. "
-                        f"Tipo: *{summary.get('kind','-')}*. Selezionato per la prossima mail."
-                    )
-                except Exception as e:
-                    st.warning(f"File salvato, ma analisi LLM fallita: {e}.")
-                st.session_state[sel_key] = list(set(st.session_state[sel_key] + [rec["id"]]))
-                st.session_state["att_uploader_version"] = st.session_state.get("att_uploader_version", 0) + 1
-                st.rerun()
-            except Exception as e:
-                st.error(f"Errore upload: {e}")
-
-    if not available_attachments:
-        st.caption("Nessun allegato in libreria.")
-    else:
-        st.caption("Seleziona gli allegati da includere:")
-        for a in available_attachments:
-            cols = st.columns([0.55, 5, 1.2])
-            checked = cols[0].checkbox(
-                " ",
-                value=a["id"] in st.session_state[sel_key],
-                key=f"att_pick_{venue['id']}_{a['id']}",
-                label_visibility="collapsed",
-            )
-            if checked and a["id"] not in st.session_state[sel_key]:
-                st.session_state[sel_key].append(a["id"])
-            elif not checked and a["id"] in st.session_state[sel_key]:
-                st.session_state[sel_key].remove(a["id"])
-
-            scope_label = "globale" if a.get("venue_id") is None else "venue"
-            summary = a.get("summary") or {}
-            title = summary.get("title") or a.get("filename")
-            cols[1].markdown(
-                f"**{attachment_icon(a.get('mime'), a.get('filename'))} {title}** "
-                f"<span style='opacity:0.6; font-size:0.85em;'>· {a.get('filename')} · "
-                f"{fmt_size(a.get('size'))} · {scope_label}</span>",
-                unsafe_allow_html=True,
-            )
-            if cols[2].button("🗑", key=f"att_del_{a['id']}", use_container_width=True):
-                db.delete_attachment(a["id"])
-                if a["id"] in st.session_state[sel_key]:
-                    st.session_state[sel_key].remove(a["id"])
-                st.rerun()
+with action_col3:
+    paste_open = st.session_state.get(f"paste_open_{venue['id']}", False)
+    if st.button("Incolla risposta", key="btn_paste_response", use_container_width=True):
+        st.session_state[f"paste_open_{venue['id']}"] = not paste_open
+        st.rerun()
 
 
 # ============== PASTE RISPOSTA (se aperto) ==============
@@ -744,19 +683,23 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
     st.subheader("Draft in lavorazione")
     is_followup = st.session_state.get("active_draft_is_followup", False)
 
-    info_bits = [
-        f"Speaker: **{draft.get('speaker_choice', '?')}**",
-        f"Tono: **{draft.get('tone', '?')}**",
-        f"Lingua: **{draft.get('language', '?')}**",
-        f"Canale: **{draft.get('channel_suggestion', '?')}**",
-    ]
-    if is_followup and draft.get("timing_suggestion_days") is not None:
-        info_bits.append(f"Timing consigliato: **{draft['timing_suggestion_days']}g**")
-    st.info("  ·  ".join(info_bits))
-    if draft.get("rationale"):
-        st.caption(f"Motivazione LLM: {draft['rationale']}")
-    if is_followup and draft.get("should_send") is False:
-        st.warning("L'LLM sconsiglia di inviare questo follow-up. Considera di modificare lo stato della venue.")
+    # Per i draft "vuoti" (Scrivi follow-up) non mostriamo info LLM finché l'utente
+    # non chiede una revisione: tutti i campi sarebbero "?" e disorientanti.
+    is_empty_draft = not (draft.get("body") or "").strip() and not draft.get("rationale")
+    if not is_empty_draft:
+        info_bits = [
+            f"Speaker: **{draft.get('speaker_choice', '?')}**",
+            f"Tono: **{draft.get('tone', '?')}**",
+            f"Lingua: **{draft.get('language', '?')}**",
+            f"Canale: **{draft.get('channel_suggestion', '?')}**",
+        ]
+        if is_followup and draft.get("timing_suggestion_days") is not None:
+            info_bits.append(f"Timing consigliato: **{draft['timing_suggestion_days']}g**")
+        st.info("  ·  ".join(info_bits))
+        if draft.get("rationale"):
+            st.caption(f"Motivazione LLM: {draft['rationale']}")
+        if is_followup and draft.get("should_send") is False:
+            st.warning("L'LLM sconsiglia di inviare questo follow-up. Considera di modificare lo stato della venue.")
 
     # Storico revisioni
     history = st.session_state.get("draft_refinement_history", [])
@@ -775,9 +718,25 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
         feedback = st.text_area(
             "Scrivi a Claude",
             height=70,
+            placeholder="Es. 'rendi il tono più diretto' oppure 'scrivimi tu una bozza partendo da quello che ho buttato giù'",
         )
         if st.form_submit_button("Invia ✦"):
             if feedback.strip():
+                # Sincronizza l'eventuale testo già scritto/modificato dall'utente nei text_input
+                # in modo che Claude veda il vero stato corrente, non la versione iniziale.
+                _dv = st.session_state.get("active_draft_version", 0)
+                cur_subject = st.session_state.get(f"active_subject_v{_dv}", draft.get("subject", ""))
+                cur_body = st.session_state.get(f"active_body_v{_dv}", draft.get("body", ""))
+                if cur_subject != draft.get("subject") or cur_body != draft.get("body"):
+                    merged = dict(draft)
+                    merged["subject"] = cur_subject
+                    merged["body"] = cur_body
+                    if history and history[-1].get("role") == "draft":
+                        history[-1] = {"role": "draft", "content": merged}
+                    else:
+                        history.append({"role": "draft", "content": merged})
+                    st.session_state["active_draft"] = merged
+                    draft = merged
                 history.append({"role": "feedback", "content": feedback.strip()})
                 with st.spinner("Riscrittura..."):
                     try:
@@ -824,6 +783,85 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
         key=f"active_body_v{draft_version}",
     )
 
+    # --- Popover allegati: visibile SOLO quando c'è un draft attivo,
+    # cioè quando stiamo davvero componendo una mail in uscita.
+    available_attachments = db.list_attachments(venue_id=venue["id"], include_shared=True)
+    _n_sel = len(st.session_state[sel_key])
+    _pop_label = (
+        f"📎 Allegati per questa mail ({_n_sel} selezionati)"
+        if _n_sel else "📎 Allegati per questa mail"
+    )
+    with st.popover(_pop_label, use_container_width=False):
+        st.caption(
+            "Carica/seleziona file da allegare a questo messaggio in uscita. "
+            "Verranno legati alla mail una volta confermata."
+        )
+
+        uploader_key = f"att_uploader_v{venue['id']}_{st.session_state.get('att_uploader_version', 0)}"
+        uploaded = st.file_uploader(
+            "Allega un file (PDF, immagine, doc) — l'LLM ne caricherà una volta sola il riassunto",
+            type=None,
+            accept_multiple_files=False,
+            key=uploader_key,
+        )
+        share_globally = st.checkbox(
+            "Condividi globalmente (disponibile anche per altre venue)",
+            value=True,
+            key=f"att_share_v{venue['id']}",
+        )
+        if uploaded is not None:
+            with st.spinner(f"Salvataggio e analisi LLM di {uploaded.name}…"):
+                try:
+                    rec = db.save_attachment(uploaded, venue_id=None if share_globally else venue["id"])
+                    try:
+                        summary = claude.summarize_attachment(rec["path"], rec["filename"], rec["mime"])
+                        db.update_attachment_summary(
+                            rec["id"], summary_json=summary, kind=summary.get("kind"),
+                        )
+                        st.success(
+                            f"{attachment_icon(rec['mime'], rec['filename'])} **{rec['filename']}** caricato. "
+                            f"Tipo: *{summary.get('kind','-')}*. Selezionato per questa mail."
+                        )
+                    except Exception as e:
+                        st.warning(f"File salvato, ma analisi LLM fallita: {e}.")
+                    st.session_state[sel_key] = list(set(st.session_state[sel_key] + [rec["id"]]))
+                    st.session_state["att_uploader_version"] = st.session_state.get("att_uploader_version", 0) + 1
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"Errore upload: {e}")
+
+        if not available_attachments:
+            st.caption("Nessun allegato in libreria.")
+        else:
+            st.caption("Seleziona gli allegati da includere:")
+            for a in available_attachments:
+                cols = st.columns([0.55, 5, 1.2])
+                checked = cols[0].checkbox(
+                    " ",
+                    value=a["id"] in st.session_state[sel_key],
+                    key=f"att_pick_{venue['id']}_{a['id']}",
+                    label_visibility="collapsed",
+                )
+                if checked and a["id"] not in st.session_state[sel_key]:
+                    st.session_state[sel_key].append(a["id"])
+                elif not checked and a["id"] in st.session_state[sel_key]:
+                    st.session_state[sel_key].remove(a["id"])
+
+                scope_label = "globale" if a.get("venue_id") is None else "venue"
+                summary = a.get("summary") or {}
+                title = summary.get("title") or a.get("filename")
+                cols[1].markdown(
+                    f"**{attachment_icon(a.get('mime'), a.get('filename'))} {title}** "
+                    f"<span style='opacity:0.6; font-size:0.85em;'>· {a.get('filename')} · "
+                    f"{fmt_size(a.get('size'))} · {scope_label}</span>",
+                    unsafe_allow_html=True,
+                )
+                if cols[2].button("🗑", key=f"att_del_{a['id']}", use_container_width=True):
+                    db.delete_attachment(a["id"])
+                    if a["id"] in st.session_state[sel_key]:
+                        st.session_state[sel_key].remove(a["id"])
+                    st.rerun()
+
     # Allegati selezionati per questa mail (chips visibili nel draft)
     selected_ids_now = list(st.session_state.get(sel_key, []))
     if selected_ids_now:
@@ -836,8 +874,7 @@ if draft and st.session_state.get("active_draft_venue_id") == venue["id"]:
             )
             st.markdown(f"**📎 Allegati in questa mail:** {chips_md}")
             st.caption(
-                "Quando confermi l'invio ti viene ricordato di allegarli su Aruba. "
-                "Modifica la selezione dalla popover **📎 Allegati** sotto i bottoni di azione."
+                "Quando confermi l'invio ti viene ricordato di allegarli su Aruba."
             )
 
     save_cols = st.columns(2)

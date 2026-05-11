@@ -590,7 +590,28 @@ Ti sto fornendo:
 
 # OBIETTIVI
 
-## 1. Il contatto è quello giusto?
+## 1. Riesame del fit venue↔progetto (fresh eyes + attività recenti)
+**Rivaluta da zero la compatibilità della venue col profilo progetto**, come se non ci fosse mai stata una valutazione precedente. In più, usa `web_search` per scoprire le **attività recenti della venue** (ultimi 6-18 mesi): eventi organizzati, nuovi format, call for speakers, cambi di direzione, nuovi programmi, comunicati stampa, post social rilevanti. Le attività recenti pesano: una venue che lancia un programma di formazione AI è oggi più fit, anche se 12 mesi fa non lo era.
+
+Cerca attivamente:
+- pagina eventi / calendario / programma del sito ufficiale
+- bandi e call attive (call for speakers, call for educators, call for trainers, partnership)
+- ultime news / press release / blog
+- attività recenti sui social pubblici (LinkedIn della venue, Instagram, Facebook)
+- se è un ente padre con sedi sorelle: cosa stanno facendo le altre sedi
+
+Confronta tutto col profilo progetto (mission, target ideale, esclusioni, differenziatori) e con gli angle disponibili degli speaker (storytelling vs AI/automazione vs misto).
+
+Compila `fit_reassessment`:
+- `score` 1|2|3 (stessa scala della discovery: 1=probabilmente no, 2=forse, 3=probabilmente sì). Decidi a freddo, anche se nello storico era già stato dato un voto: questo è un riesame.
+- `recent_activities`: 2-4 frasi su cosa fa la venue ultimamente (con almeno 1 riferimento concreto: evento, bando, comunicato, post). Se non trovi nulla di rilevante, dillo esplicitamente ("nessuna attività rilevante negli ultimi 12 mesi").
+- `fit_rationale`: 2-3 frasi su perché questo score considerando profilo progetto + attività recenti + angolo proponibile dagli speaker.
+- `positive_signals`: 1-5 bullet di segnali a favore (es. "ha attivato academy AI nel 2026", "call for speakers aperta per il summit di novembre").
+- `negative_signals`: 1-5 bullet di segnali contro (es. "agenda 2026 chiusa, prossima edizione 2027", "target principalmente accademico, lontano dal profilo PMI del progetto").
+
+Lo score di `fit_reassessment` informa direttamente la scelta di `next_action`: score 1 + ghosting → tende a `mark_rejected`; score 3 con bando aperto → tende a `follow_up` con urgenza.
+
+## 2. Il contatto è quello giusto?
 Verifica con `web_search` se il contatto attualmente usato è davvero il referente migliore per proporre uno speaker/formatore presso questa venue. Cerca:
 - sito ufficiale → pagina team / contatti / organizzazione / chi-siamo
 - LinkedIn della venue → chi gestisce eventi, programmazione, formazione, partnership, comunicazione
@@ -605,7 +626,7 @@ Se **false**, compila `better_contact` con il referente migliore trovato (nome, 
 
 Se **true**, popola `better_contact` con tutti i campi a stringa vuota.
 
-## 2. Cosa fare adesso?
+## 3. Cosa fare adesso?
 Sulla base di: storico (prima mail, ev. follow-up, risposte, ghosting), giorni trascorsi dall'ultima mail uscente, qualità del fit venue↔progetto, qualità del contatto attuale, scegli `next_action` tra:
 
 - **`switch_contact`** — il contatto attuale non è quello giusto. La proposta operativa è cambiare referente. Compila `better_contact`.
@@ -613,7 +634,7 @@ Sulla base di: storico (prima mail, ev. follow-up, risposte, ghosting), giorni t
 - **`mark_rejected`** — il contatto è quello giusto MA il fit/timing/sintomi indicano che non ne vale la pena (ghosting prolungato, segnali di disinteresse strutturale, scope distante, troppo blasonati per outreach freddo). Spiega in `rejection_reasoning`.
 - **`wait`** — è troppo presto per fare follow-up (es. ≤5 giorni dall'ultima mail) o c'è una ragione concreta per aspettare (deadline futura, evento in corso). Compila `follow_up_plan.timing_days` con i giorni da attendere prima di muoversi.
 
-## 3. Piano di follow-up (solo se `next_action` ∈ {follow_up, wait})
+## 4. Piano di follow-up (solo se `next_action` ∈ {follow_up, wait})
 Compila `follow_up_plan`:
 - `should_send` true se ha senso mandarlo, false se meglio aspettare/rinunciare.
 - `timing_days`: giorni dall'OGGI (non dall'ultima mail) prima del prossimo invio. 0 = subito.
@@ -624,8 +645,8 @@ Compila `follow_up_plan`:
 
 Se `next_action` è `switch_contact` o `mark_rejected`: `follow_up_plan.should_send=false`, `timing_days=0`, gli altri campi a stringa vuota.
 
-## 4. Sintesi salvabile
-Compila `summary` con 3-6 righe markdown che riassumono in italiano: cosa hai scoperto sul contatto, decisione, prossima azione consigliata, eventuali link/fonti utili. Questo testo verrà salvato nelle note della venue, quindi deve essere autosufficiente (riferimenti espliciti, date, link).
+## 5. Sintesi salvabile
+Compila `summary` con 4-8 righe markdown che riassumono in italiano: il fit aggiornato (score + attività recenti chiave), cosa hai scoperto sul contatto, decisione, prossima azione consigliata, eventuali link/fonti utili. Questo testo verrà salvato nelle note della venue, quindi deve essere autosufficiente (riferimenti espliciti, date, link).
 
 # OUTPUT
 Restituisci JSON conforme allo schema fornito. Niente testo prima/dopo. Per qualsiasi campo stringa non determinato, usa `""` (mai null).

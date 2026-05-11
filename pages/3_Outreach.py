@@ -762,7 +762,47 @@ if prior_outgoing > 0:
             st.session_state.pop(analysis_key, None)
             st.rerun()
 
-        # 1. Contatto attuale: ok o no?
+        # 1. Riesame fit venue↔progetto (con attività recenti)
+        fit = result.get("fit_reassessment") or {}
+        if fit:
+            with st.container(border=True):
+                new_score = fit.get("score")
+                old_score = venue.get("acceptance_score")
+                score_emoji = {1: "🔴", 2: "🟡", 3: "🟢"}.get(new_score, "❔")
+                score_label = {1: "Probabilmente no", 2: "Forse", 3: "Probabilmente sì"}.get(new_score, "?")
+                head_left, head_right = st.columns([4, 1])
+                head_left.markdown(
+                    f"### {score_emoji} Fit aggiornato: **{new_score}/3** — {score_label}"
+                )
+                if old_score and new_score and old_score != new_score:
+                    delta_arrow = "⬆️" if new_score > old_score else "⬇️"
+                    head_right.markdown(f"{delta_arrow} _da {old_score}/3_")
+                elif old_score:
+                    head_right.markdown(f"_invariato ({old_score}/3)_")
+
+                if fit.get("recent_activities"):
+                    st.markdown(f"**Attività recenti:** {fit['recent_activities']}")
+                if fit.get("fit_rationale"):
+                    st.markdown(f"**Perché questo score:** {fit['fit_rationale']}")
+
+                sig_cols = st.columns(2)
+                pos = fit.get("positive_signals") or []
+                neg = fit.get("negative_signals") or []
+                if pos:
+                    sig_cols[0].markdown("**✅ Segnali a favore**\n" + "\n".join(f"- {s}" for s in pos))
+                if neg:
+                    sig_cols[1].markdown("**⚠️ Segnali contro**\n" + "\n".join(f"- {s}" for s in neg))
+
+                if new_score and new_score != old_score:
+                    if st.button(
+                        f"Aggiorna acceptance_score della venue a {new_score}/3",
+                        key=f"btn_update_acceptance_{venue['id']}",
+                    ):
+                        db.update_venue(venue["id"], {"acceptance_score": new_score})
+                        st.toast(f"acceptance_score aggiornato a {new_score}/3", icon="✓")
+                        st.rerun()
+
+        # 2. Contatto attuale: ok o no?
         is_best = bool(result.get("is_current_contact_best"))
         if is_best:
             st.success("✓ Il contatto attualmente usato è il referente giusto.")
@@ -771,7 +811,7 @@ if prior_outgoing > 0:
         if result.get("current_contact_assessment"):
             st.markdown(f"**Valutazione contatto attuale:** {result['current_contact_assessment']}")
 
-        # 2. Contatto migliore (se trovato)
+        # 3. Contatto migliore (se trovato)
         bc = result.get("better_contact") or {}
         if bc.get("name") or bc.get("email") or bc.get("role"):
             with st.container(border=True):
@@ -789,7 +829,7 @@ if prior_outgoing > 0:
                 if bc.get("rationale"): rows.append(f"- **Motivazione:** {bc['rationale']}")
                 st.markdown("\n".join(rows))
 
-        # 3. Prossima azione consigliata
+        # 4. Prossima azione consigliata
         action = result.get("next_action") or "follow_up"
         action_labels = {
             "follow_up": "📨 Fare follow-up",

@@ -363,6 +363,18 @@ SUGGEST_CHANNEL_SCHEMA = {
 ANALYZE_OUTREACH_APPROACH_SCHEMA = {
     "type": "object",
     "properties": {
+        "fit_reassessment": {
+            "type": "object",
+            "properties": {
+                "score": {"type": "integer", "enum": [1, 2, 3]},
+                "recent_activities": {"type": "string"},
+                "fit_rationale": {"type": "string"},
+                "positive_signals": {"type": "array", "items": {"type": "string"}},
+                "negative_signals": {"type": "array", "items": {"type": "string"}},
+            },
+            "required": ["score", "recent_activities", "fit_rationale", "positive_signals", "negative_signals"],
+            "additionalProperties": False,
+        },
         "is_current_contact_best": {"type": "boolean"},
         "current_contact_assessment": {"type": "string"},
         "better_contact": {
@@ -400,6 +412,7 @@ ANALYZE_OUTREACH_APPROACH_SCHEMA = {
         "summary": {"type": "string"},
     },
     "required": [
+        "fit_reassessment",
         "is_current_contact_best", "current_contact_assessment", "better_contact",
         "next_action", "follow_up_plan", "rejection_reasoning", "summary",
     ],
@@ -807,6 +820,16 @@ def analyze_outreach_approach(
     parts = [
         prompts.venue_block(venue),
     ]
+    # Punteggio fit precedente (se mai assegnato) → utile per il riesame, ma da
+    # non assumere come ancoraggio: il prompt chiede esplicitamente fresh-eyes.
+    prev_score = venue.get("acceptance_score")
+    if prev_score:
+        parts.append(
+            f"=== VALUTAZIONE FIT PRECEDENTE ===\n"
+            f"acceptance_score storico: {prev_score}/3. "
+            "Rivaluta a freddo nel `fit_reassessment` — non ancorarti a questo valore, "
+            "ma puoi citarlo se ti sembra ancora valido."
+        )
     org_block = prompts.organizer_block(organizer, n_related_venues=len(sibling_venues) + (1 if organizer else 0))
     if org_block:
         parts.append(org_block)

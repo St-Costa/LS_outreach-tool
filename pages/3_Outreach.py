@@ -864,6 +864,55 @@ if prior_outgoing > 0:
             if plan.get("body_hint"):
                 st.markdown(f"**Angolo / elemento nuovo:**\n\n> {plan['body_hint']}")
 
+            # Bottone dedicato: usa il piano della NUOVA analisi come context one-shot
+            # nel drafter di follow-up. I dettagli strutturati (subject_hint, body_hint,
+            # fit, segnali) sono iniettati nel prompt SOLO per questa generazione: non
+            # vengono salvati (l'unico residuo permanente è il `summary` già appeso
+            # alle note venue al momento dell'analisi).
+            if st.button(
+                "📨 Crea follow-up basato su questa analisi",
+                key=f"btn_followup_from_analysis_{venue['id']}",
+                type="primary",
+                help=(
+                    "Genera il draft del follow-up iniettando subito nel prompt il piano "
+                    "(oggetto, angolo, tono) emerso dall'analisi. Le info one-shot non vengono "
+                    "salvate: solo il summary già nelle note resta a lungo termine."
+                ),
+            ):
+                with st.spinner("Generazione draft con LLM (con context dell'analisi)..."):
+                    try:
+                        last_received_now = next(
+                            (i for i in reversed(interactions) if i.get("direction") == "ricevuta"),
+                            None,
+                        )
+                        days_since_now = 0
+                        if last_outgoing:
+                            try:
+                                _occ = last_outgoing.get("occurred_at")
+                                if isinstance(_occ, str):
+                                    _occ = datetime.fromisoformat(_occ)
+                                days_since_now = (datetime.now() - _occ).days if _occ else 0
+                            except Exception:
+                                days_since_now = 0
+                        draft = claude.draft_follow_up(
+                            venue, contact_for_draft, last_outgoing, last_received_now,
+                            days_since_now,
+                            list(st.session_state.get(sel_key, [])),
+                            analysis_context=result,
+                        )
+                        st.session_state["active_draft"] = draft
+                        st.session_state["active_draft_venue_id"] = venue["id"]
+                        st.session_state["active_draft_is_followup"] = True
+                        st.session_state["draft_refinement_history"] = [
+                            {"role": "draft", "content": draft}
+                        ]
+                        st.session_state["active_draft_version"] = (
+                            st.session_state.get("active_draft_version", 0) + 1
+                        )
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"Errore: {e}")
+
     st.divider()
 
 

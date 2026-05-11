@@ -703,6 +703,71 @@ def refine_first_email(
     )
 
 
+def _analysis_context_block(analysis: dict) -> str:
+    """Rendering one-shot del risultato di analyze_outreach_approach come blocco prompt.
+
+    Non viene persistito: è valido solo per la singola chiamata di drafting che riceve
+    `analysis_context`. Serve a iniettare fit aggiornato + segnali + piano nel drafter
+    senza dover passare dal `summary` testuale nelle note venue (che è invece
+    salvato permanentemente)."""
+    if not analysis:
+        return ""
+    parts = ["=== ANALISI APPROFONDITA APPENA EFFETTUATA (one-shot, non persistita su DB) ==="]
+    parts.append(
+        "Questi sono i risultati di una deep-search appena conclusa sulla venue/contatto. "
+        "Usali come scheletro per il follow-up: applica oggetto/angolo/tono suggeriti, "
+        "salvo controindicazioni evidenti rispetto a profilo speaker o linee guida."
+    )
+
+    fit = analysis.get("fit_reassessment") or {}
+    if fit:
+        parts.append(f"\n-- Fit aggiornato --\nScore: {fit.get('score', '?')}/3")
+        if fit.get("fit_rationale"):
+            parts.append(f"Perché: {fit['fit_rationale']}")
+        if fit.get("recent_activities"):
+            parts.append(f"Attività recenti: {fit['recent_activities']}")
+        pos = fit.get("positive_signals") or []
+        neg = fit.get("negative_signals") or []
+        if pos:
+            parts.append("Segnali a favore:\n" + "\n".join(f"  + {s}" for s in pos))
+        if neg:
+            parts.append("Segnali contro:\n" + "\n".join(f"  - {s}" for s in neg))
+
+    cc_ass = analysis.get("current_contact_assessment")
+    if cc_ass:
+        is_best = analysis.get("is_current_contact_best")
+        parts.append(
+            f"\n-- Contatto attuale --\nÈ il migliore: {bool(is_best)}\nValutazione: {cc_ass}"
+        )
+
+    bc = analysis.get("better_contact") or {}
+    if bc.get("name") or bc.get("email"):
+        bc_lines = ["\n-- Contatto alternativo suggerito (NON ancora salvato in DB) --"]
+        for k, label in (("name", "Nome"), ("role", "Ruolo"), ("email", "Email"),
+                          ("phone", "Telefono"), ("source_url", "Fonte")):
+            if bc.get(k):
+                bc_lines.append(f"{label}: {bc[k]}")
+        if bc.get("rationale"):
+            bc_lines.append(f"Motivazione: {bc['rationale']}")
+        parts.append("\n".join(bc_lines))
+
+    plan = analysis.get("follow_up_plan") or {}
+    if plan:
+        parts.append("\n-- Piano follow-up consigliato --")
+        parts.append(f"Inviare: {plan.get('should_send', '?')}")
+        parts.append(f"Tempistica: {plan.get('timing_days', '?')} giorni da oggi")
+        if plan.get("tone"):
+            parts.append(f"Tono: {plan['tone']}")
+        if plan.get("subject_hint"):
+            parts.append(f"Oggetto suggerito: «{plan['subject_hint']}»")
+        if plan.get("body_hint"):
+            parts.append(f"Angolo / elemento nuovo da introdurre:\n{plan['body_hint']}")
+        if plan.get("rationale"):
+            parts.append(f"Motivazione: {plan['rationale']}")
+
+    return "\n".join(parts)
+
+
 def draft_follow_up(
     venue: dict,
     contact: Optional[dict],
@@ -710,6 +775,7 @@ def draft_follow_up(
     response: Optional[dict],
     days_since: int,
     selected_attachment_ids: Optional[list[int]] = None,
+    analysis_context: Optional[dict] = None,
 ) -> dict:
     """Suggerisce timing + draft di un follow-up. Output JSON: timing_suggestion_days, should_send (bool), subject, body, channel_suggestion, rationale.
 
@@ -755,7 +821,12 @@ def draft_follow_up(
                 selected,
                 header="ALLEGATI DA INCLUDERE IN QUESTO FOLLOW-UP",
             ))
-    parts.extend([history_text, prompts.DRAFT_FOLLOW_UP_TASK])
+    parts.append(history_text)
+    if analysis_context:
+        analysis_block = _analysis_context_block(analysis_context)
+        if analysis_block:
+            parts.append(analysis_block)
+    parts.append(prompts.DRAFT_FOLLOW_UP_TASK)
     user_text = "\n\n".join(parts)
     return _call_json(
         system_blocks=_build_system_blocks(speakers, profile, include_email_guidelines=True),

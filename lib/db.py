@@ -217,6 +217,7 @@ CREATE INDEX IF NOT EXISTS idx_venues_region ON venues(region);
 CREATE INDEX IF NOT EXISTS idx_interactions_venue ON interactions(venue_id);
 CREATE INDEX IF NOT EXISTS idx_interactions_contact ON interactions(contact_id);
 CREATE INDEX IF NOT EXISTS idx_interactions_occurred_at ON interactions(occurred_at);
+CREATE INDEX IF NOT EXISTS idx_interactions_venue_dir_draft ON interactions(venue_id, direction, is_draft);
 CREATE INDEX IF NOT EXISTS idx_organizers_name ON organizers(name);
 CREATE INDEX IF NOT EXISTS idx_contacts_email ON contacts(email);
 CREATE INDEX IF NOT EXISTS idx_llm_calls_ts ON llm_calls(ts);

@@ -261,24 +261,69 @@ with header_col2:
         )
 
 contacts = db.get_contacts_for_venue(venue["id"])
-contact_for_draft = contacts[0] if contacts else None
-if contacts:
+
+
+def _rank_contacts_for_venue(cs: list[dict], current_venue_id: int) -> list[tuple[dict, int, str]]:
+    """Ordina i contatti per probabilità di risposta in base allo storico cross-venue.
+
+    Tier (score desc):
+      3 = ha già RISPOSTO altrove (≥1 interazione direction='ricevuta' su altra venue)
+      2 = è stato CONTATTATO altrove senza risposta (≥1 'inviata' non-draft, 0 'ricevuta')
+      1 = ha risposto SU QUESTA venue (storia same-venue)
+      0 = mai usato / nessuna interazione rilevante
+
+    Restituisce lista di (contact, score, motivo) ordinata desc."""
+    ranked: list[tuple[dict, int, str]] = []
+    for c in cs:
+        ints = db.get_interactions_for_contact(c["id"], limit=50)
+        ints = [it for it in ints if not (it.get("direction") == "inviata" and it.get("is_draft"))]
+        cross = [it for it in ints if it.get("venue_id") != current_venue_id]
+        same = [it for it in ints if it.get("venue_id") == current_venue_id]
+        cross_received = [it for it in cross if it.get("direction") == "ricevuta"]
+        cross_sent = [it for it in cross if it.get("direction") == "inviata"]
+        same_received = [it for it in same if it.get("direction") == "ricevuta"]
+        if cross_received:
+            # Trova il nome venue dove ha risposto, se possibile
+            v_other = cross_received[0].get("venue_id")
+            v_obj = db.get_venue(v_other) if v_other else None
+            v_name = v_obj["name"] if v_obj else "altra venue"
+            ranked.append((c, 3, f"ha già risposto da {v_name}"))
+        elif cross_sent:
+            ranked.append((c, 2, f"contattato su {len(cross_sent)} altra/e venue, nessuna risposta"))
+        elif same_received:
+            ranked.append((c, 1, "ha già risposto su questa venue"))
+        else:
+            ranked.append((c, 0, "mai usato"))
+    ranked.sort(key=lambda t: t[1], reverse=True)
+    return ranked
+
+
+ranked_contacts = _rank_contacts_for_venue(contacts, venue["id"]) if contacts else []
+contact_for_draft = ranked_contacts[0][0] if ranked_contacts else None
+
+if ranked_contacts:
     # Bottoni cliccabili che aprono il contatto specifico nella pagina Contatti.
     # Streamlit non supporta link cross-page nel markdown: serve un button reale.
-    st.markdown("👥 **Contatti:**")
-    cols = st.columns(max(len(contacts), 4))
-    for idx, c in enumerate(contacts):
+    top_score = ranked_contacts[0][1]
+    if top_score >= 2:
+        _name = " ".join(filter(None, [contact_for_draft.get("first_name"), contact_for_draft.get("last_name")])).strip() or contact_for_draft.get("email") or "primo contatto"
+        st.markdown(f"👥 **Contatti** &nbsp; — &nbsp; ✨ consigliato: **{_name}** ({ranked_contacts[0][2]})")
+    else:
+        st.markdown("👥 **Contatti:**")
+    cols = st.columns(max(len(ranked_contacts), 4))
+    for idx, (c, score, reason) in enumerate(ranked_contacts):
         label = (
             " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip()
             or c.get("email")
             or "(senza nome)"
         )
         role = f" · {c['role']}" if c.get("role") else ""
+        prefix = "✨ " if idx == 0 and score >= 2 else ""
         if cols[idx].button(
-            f"{label}{role}",
+            f"{prefix}{label}{role}",
             key=f"open_contact_{c['id']}",
             use_container_width=True,
-            help="Apri scheda contatto",
+            help=f"Apri scheda contatto — {reason}",
         ):
             st.session_state["contact_focus_id"] = c["id"]
             st.session_state["return_to"] = {

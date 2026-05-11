@@ -1,8 +1,18 @@
-"""Contatti — CRUD persone collegate alle venue."""
+"""Contatti — vista a grafo (default) + vista tabella CRUD.
+
+Il grafo mostra venue (blu) e enti (arancio) come nodi principali. I contatti
+con ≥2 collegamenti diventano "ponti" rappresentati da archi etichettati col
+nome del contatto. I contatti orfani (1 solo collegamento) sono piccoli nodi
+verdi attaccati al loro parent (raggruppamento visivo). Le relazioni venue→ente
+(FK organizer_id) sono archi grigi senza etichetta.
+"""
 from __future__ import annotations
+
+from itertools import combinations
 
 import pandas as pd
 import streamlit as st
+from streamlit_agraph import Config, Edge, Node, agraph
 
 from lib import db, pipeline, ui
 
@@ -11,7 +21,7 @@ ui.apply_global_style()
 db.init_db()
 
 st.title("Contatti")
-st.caption("Persone con cui si comunica. Un contatto può essere collegato a più venue.")
+st.caption("Persone con cui si comunica. Un contatto può essere collegato a più venue ed enti.")
 
 # Breadcrumb di ritorno (impostato dal chiamante via session_state["return_to"])
 _return_to = st.session_state.get("return_to")
@@ -23,131 +33,325 @@ if isinstance(_return_to, dict) and _return_to.get("page"):
 
 
 # Apertura mirata a un contatto specifico (es. link dalla pagina Outreach).
-# Va applicata PRIMA del render dei widget perché manipola le rispettive session_state key.
+# Forza la vista tabella perché il dettaglio è lì.
 _focus_contact_id = st.session_state.pop("contact_focus_id", None)
 if _focus_contact_id:
+    st.session_state["contacts_view"] = "tabella"
     st.session_state["contacts_search"] = ""
     st.session_state["contacts_filter_venue"] = None
     st.session_state["contacts_detail_select"] = _focus_contact_id
 
-col1, col2 = st.columns(2)
-with col1:
-    f_search = st.text_input("Cerca", placeholder="nome, email, ruolo...", key="contacts_search")
-with col2:
-    venues_all = db.list_venues()
-    venue_options = [None] + [v["id"] for v in venues_all]
-    f_venue = st.selectbox(
-        "Filtro venue",
-        options=venue_options,
-        format_func=lambda i: "(tutte)" if i is None else next(v["name"] for v in venues_all if v["id"] == i),
-        key="contacts_filter_venue",
-    )
 
-filters: dict = {}
-if f_search:
-    filters["search"] = f_search
-if f_venue:
-    filters["venue_id"] = f_venue
+# ---------------- Toggle vista ----------------
 
-contacts = db.list_contacts(filters)
-header_l, header_r = st.columns([5, 1])
-header_l.write(f"**{len(contacts)}** contatti trovati")
-header_r.download_button(
-    "⬇ CSV contatti",
-    data=ui.rows_to_csv_bytes(
-        [
-            {
-                "id": c["id"],
-                "first_name": c.get("first_name"),
-                "last_name": c.get("last_name"),
-                "role": c.get("role"),
-                "email": c.get("email"),
-                "phone": c.get("phone"),
-                "language_pref": c.get("language_pref"),
-                "social_linkedin": c.get("social_linkedin"),
-                "social_instagram": c.get("social_instagram"),
-                "suggested_tone": c.get("suggested_tone"),
-                "notes": c.get("notes"),
-                "venues": ", ".join(v["name"] for v in db.get_venues_for_contact(c["id"])),
-            }
-            for c in contacts
-        ],
-        columns=[
-            "id", "first_name", "last_name", "role", "email", "phone",
-            "language_pref", "social_linkedin", "social_instagram",
-            "suggested_tone", "notes", "venues",
-        ],
-    ),
-    file_name="contatti.csv",
-    mime="text/csv",
-    use_container_width=True,
-    help="Esporta i contatti correnti (filtri applicati) in CSV.",
+view = st.segmented_control(
+    "Vista",
+    options=["grafo", "tabella"],
+    default=st.session_state.get("contacts_view", "grafo"),
+    key="contacts_view",
+    label_visibility="collapsed",
 )
+if view is None:
+    view = "grafo"
 
-if contacts:
-    rows = []
+
+# ============================================================
+# VISTA GRAFO
+# ============================================================
+
+def _render_graph() -> None:
+    venues = db.list_venues()
+    organizers = db.list_organizers()
+    contacts = db.list_contacts()
+
+    if not venues and not organizers:
+        st.info("Nessuna venue o ente in DB. Importa o aggiungi qualcosa per vedere il grafo.")
+        return
+
+    # Mappa rapide per lookup
+    venue_by_id = {v["id"]: v for v in venues}
+    org_by_id = {o["id"]: o for o in organizers}
+
+    # Pre-calcolo collegamenti per ogni contatto
+    contact_links: dict[int, dict] = {}
     for c in contacts:
-        venues = db.get_venues_for_contact(c["id"])
-        rows.append({
-            "id": c["id"],
-            "Nome": " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)",
-            "Ruolo": c.get("role") or "",
-            "Email": c.get("email") or "",
-            "Lingua": c.get("language_pref") or "",
-            "Venue collegate": ", ".join(v["name"] for v in venues) or "—",
-        })
-    df = pd.DataFrame(rows)
-    st.dataframe(df.drop(columns=["id"]), use_container_width=True, hide_index=True)
-    selected_id = st.selectbox(
-        "Seleziona contatto per dettaglio",
-        options=[None] + [c["id"] for c in contacts],
-        format_func=lambda i: "—" if i is None else next(
-            r["Nome"] for r in rows if r["id"] == i
-        ),
-        key="contacts_detail_select",
+        v_links = db.get_venues_for_contact(c["id"])
+        o_links = db.get_organizers_for_contact(c["id"])
+        contact_links[c["id"]] = {
+            "contact": c,
+            "venues": v_links,
+            "organizers": o_links,
+        }
+
+    nodes: list[Node] = []
+    edges: list[Edge] = []
+    seen_node_ids: set[str] = set()
+
+    COL_VENUE = "#4F8BF9"          # blu
+    COL_ORG = "#F39C12"            # arancio
+    COL_CONTACT_ORPHAN = "#27AE60" # verde (orfano)
+    COL_EDGE_FK = "#BDC3C7"        # grigio chiaro (FK venue→ente)
+    COL_EDGE_CONTACT = "#7F8C8D"   # grigio scuro (contatto-ponte)
+
+    # Nodi venue
+    for v in venues:
+        nid = f"v{v['id']}"
+        seen_node_ids.add(nid)
+        meta = f"\n{v.get('city') or ''}".strip()
+        title = f"Venue: {v['name']}"
+        if v.get("city"):
+            title += f"\n{v['city']}"
+        if v.get("pipeline_status"):
+            title += f"\nStato: {pipeline.label(v['pipeline_status'], pipeline.PIPELINE_LABELS)}"
+        nodes.append(Node(
+            id=nid,
+            label=v["name"],
+            color=COL_VENUE,
+            shape="dot",
+            size=18,
+            title=title,
+        ))
+
+    # Nodi enti
+    for o in organizers:
+        nid = f"e{o['id']}"
+        seen_node_ids.add(nid)
+        title = f"Ente: {o['name']}"
+        if o.get("type"):
+            title += f"\n{o['type']}"
+        if o.get("hq_city"):
+            title += f"\n{o['hq_city']}"
+        nodes.append(Node(
+            id=nid,
+            label=o["name"],
+            color=COL_ORG,
+            shape="square",
+            size=22,
+            title=title,
+        ))
+
+    # Archi venue↔ente (FK organizer_id)
+    for v in venues:
+        if v.get("organizer_id"):
+            edges.append(Edge(
+                source=f"v{v['id']}",
+                target=f"e{v['organizer_id']}",
+                color=COL_EDGE_FK,
+                dashes=True,
+            ))
+
+    # Contatti: ponti (≥2 link) → edge etichettati; orfani (1 link) → nodo piccolo
+    for cid, info in contact_links.items():
+        c = info["contact"]
+        full_name = " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)"
+        # Costruisci lista parent node ids effettivamente esistenti nel grafo
+        parents: list[str] = []
+        for v in info["venues"]:
+            if f"v{v['id']}" in seen_node_ids:
+                parents.append(f"v{v['id']}")
+        for o in info["organizers"]:
+            if f"e{o['id']}" in seen_node_ids:
+                parents.append(f"e{o['id']}")
+        if not parents:
+            # contatto senza alcun link → lo mostriamo comunque come nodo isolato per renderlo trovabile
+            nid = f"c{cid}"
+            nodes.append(Node(
+                id=nid,
+                label=full_name,
+                color=COL_CONTACT_ORPHAN,
+                shape="dot",
+                size=8,
+                title=f"Contatto: {full_name}" + (f"\n{c.get('email')}" if c.get("email") else ""),
+            ))
+            continue
+        if len(parents) == 1:
+            # orfano: nodo piccolo attaccato al parent
+            nid = f"c{cid}"
+            nodes.append(Node(
+                id=nid,
+                label=full_name,
+                color=COL_CONTACT_ORPHAN,
+                shape="dot",
+                size=8,
+                title=f"Contatto: {full_name}" + (f"\n{c.get('email')}" if c.get("email") else ""),
+            ))
+            edges.append(Edge(source=parents[0], target=nid, color=COL_CONTACT_ORPHAN))
+        else:
+            # ponte: edge etichettato tra ogni coppia di parents
+            for a, b in combinations(parents, 2):
+                edges.append(Edge(
+                    source=a,
+                    target=b,
+                    label=full_name,
+                    color=COL_EDGE_CONTACT,
+                    # node id codificato per gestire il click su edge se serve in futuro
+                ))
+
+    # Legenda compatta
+    st.markdown(
+        f"""<div style="margin: 0 0 8px 0; font-size: 13px;">
+        <span style="color:{COL_VENUE};">●</span> Venue &nbsp;
+        <span style="color:{COL_ORG};">■</span> Ente &nbsp;
+        <span style="color:{COL_CONTACT_ORPHAN};">●</span> Contatto (orfano) &nbsp;
+        <span style="color:{COL_EDGE_CONTACT};">━</span> Contatto-ponte (etichetta sull'arco) &nbsp;
+        <span style="color:{COL_EDGE_FK};">┄</span> Venue→Ente
+        </div>""",
+        unsafe_allow_html=True,
     )
-else:
-    selected_id = None
-    st.info("Nessun contatto.")
 
-st.divider()
+    config = Config(
+        height=700,
+        width="100%",
+        directed=False,
+        physics=True,
+        hierarchical=False,
+        nodeHighlightBehavior=True,
+        highlightColor="#F1C40F",
+        collapsible=False,
+    )
+    clicked = agraph(nodes=nodes, edges=edges, config=config)
 
-
-with st.expander("Aggiungi contatto"):
-    with st.form("new_contact_form"):
-        c1, c2 = st.columns(2)
-        nc_first = c1.text_input("Nome")
-        nc_last = c2.text_input("Cognome")
-        nc_role = c1.text_input("Ruolo")
-        nc_email = c2.text_input("Email")
-        nc_phone = c1.text_input("Telefono")
-        nc_lang = c2.selectbox("Lingua preferita", ["IT", "EN", "DE", "IT/DE"])
-        nc_li = c1.text_input("LinkedIn")
-        nc_ig = c2.text_input("Instagram")
-        nc_tone = c1.selectbox("Tono consigliato", ["", "formale", "cordiale", "informale", "tecnico"])
-        nc_notes = st.text_area("Note", height=120)
-        if st.form_submit_button("Crea"):
-            db.insert_contact({
-                "first_name": nc_first or None,
-                "last_name": nc_last or None,
-                "role": nc_role or None,
-                "email": nc_email or None,
-                "phone": nc_phone or None,
-                "language_pref": nc_lang,
-                "social_linkedin": nc_li or None,
-                "social_instagram": nc_ig or None,
-                "suggested_tone": nc_tone or None,
-                "notes": nc_notes or None,
-            })
-            st.success("Contatto creato.")
+    if clicked:
+        # streamlit-agraph ritorna l'id del nodo cliccato (stringa) o None.
+        try:
+            kind = str(clicked)[0]
+            ident = int(str(clicked)[1:])
+        except (ValueError, IndexError):
+            kind, ident = None, None
+        if kind == "v":
+            st.session_state["venue_edit_id"] = ident
+            st.switch_page("pages/1_Venue.py")
+        elif kind == "e":
+            st.session_state["selected_organizer_id"] = ident
+            st.switch_page("pages/4_Enti.py")
+        elif kind == "c":
+            # rimani sulla pagina, switcha alla tabella focalizzata
+            st.session_state["contacts_view"] = "tabella"
+            st.session_state["contacts_detail_select"] = ident
             st.rerun()
 
 
-if selected_id:
-    contact = db.get_contact(selected_id)
-    if not contact:
-        st.error("Non trovato.")
+# ============================================================
+# VISTA TABELLA (legacy, CRUD)
+# ============================================================
+
+def _render_table() -> None:
+    col1, col2 = st.columns(2)
+    with col1:
+        f_search = st.text_input("Cerca", placeholder="nome, email, ruolo...", key="contacts_search")
+    with col2:
+        venues_all = db.list_venues()
+        venue_options = [None] + [v["id"] for v in venues_all]
+        f_venue = st.selectbox(
+            "Filtro venue",
+            options=venue_options,
+            format_func=lambda i: "(tutte)" if i is None else next(v["name"] for v in venues_all if v["id"] == i),
+            key="contacts_filter_venue",
+        )
+
+    filters: dict = {}
+    if f_search:
+        filters["search"] = f_search
+    if f_venue:
+        filters["venue_id"] = f_venue
+
+    contacts = db.list_contacts(filters)
+    header_l, header_r = st.columns([5, 1])
+    header_l.write(f"**{len(contacts)}** contatti trovati")
+    header_r.download_button(
+        "⬇ CSV contatti",
+        data=ui.rows_to_csv_bytes(
+            [
+                {
+                    "id": c["id"],
+                    "first_name": c.get("first_name"),
+                    "last_name": c.get("last_name"),
+                    "role": c.get("role"),
+                    "email": c.get("email"),
+                    "phone": c.get("phone"),
+                    "language_pref": c.get("language_pref"),
+                    "social_linkedin": c.get("social_linkedin"),
+                    "social_instagram": c.get("social_instagram"),
+                    "suggested_tone": c.get("suggested_tone"),
+                    "notes": c.get("notes"),
+                    "venues": ", ".join(v["name"] for v in db.get_venues_for_contact(c["id"])),
+                }
+                for c in contacts
+            ],
+            columns=[
+                "id", "first_name", "last_name", "role", "email", "phone",
+                "language_pref", "social_linkedin", "social_instagram",
+                "suggested_tone", "notes", "venues",
+            ],
+        ),
+        file_name="contatti.csv",
+        mime="text/csv",
+        use_container_width=True,
+        help="Esporta i contatti correnti (filtri applicati) in CSV.",
+    )
+
+    if contacts:
+        rows = []
+        for c in contacts:
+            venues = db.get_venues_for_contact(c["id"])
+            rows.append({
+                "id": c["id"],
+                "Nome": " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)",
+                "Ruolo": c.get("role") or "",
+                "Email": c.get("email") or "",
+                "Lingua": c.get("language_pref") or "",
+                "Venue collegate": ", ".join(v["name"] for v in venues) or "—",
+            })
+        df = pd.DataFrame(rows)
+        st.dataframe(df.drop(columns=["id"]), use_container_width=True, hide_index=True)
+        selected_id = st.selectbox(
+            "Seleziona contatto per dettaglio",
+            options=[None] + [c["id"] for c in contacts],
+            format_func=lambda i: "—" if i is None else next(
+                r["Nome"] for r in rows if r["id"] == i
+            ),
+            key="contacts_detail_select",
+        )
     else:
+        selected_id = None
+        st.info("Nessun contatto.")
+
+    st.divider()
+
+    with st.expander("Aggiungi contatto"):
+        with st.form("new_contact_form"):
+            c1, c2 = st.columns(2)
+            nc_first = c1.text_input("Nome")
+            nc_last = c2.text_input("Cognome")
+            nc_role = c1.text_input("Ruolo")
+            nc_email = c2.text_input("Email")
+            nc_phone = c1.text_input("Telefono")
+            nc_lang = c2.selectbox("Lingua preferita", ["IT", "EN", "DE", "IT/DE"])
+            nc_li = c1.text_input("LinkedIn")
+            nc_ig = c2.text_input("Instagram")
+            nc_tone = c1.selectbox("Tono consigliato", ["", "formale", "cordiale", "informale", "tecnico"])
+            nc_notes = st.text_area("Note", height=120)
+            if st.form_submit_button("Crea"):
+                db.insert_contact({
+                    "first_name": nc_first or None,
+                    "last_name": nc_last or None,
+                    "role": nc_role or None,
+                    "email": nc_email or None,
+                    "phone": nc_phone or None,
+                    "language_pref": nc_lang,
+                    "social_linkedin": nc_li or None,
+                    "social_instagram": nc_ig or None,
+                    "suggested_tone": nc_tone or None,
+                    "notes": nc_notes or None,
+                })
+                st.success("Contatto creato.")
+                st.rerun()
+
+    if selected_id:
+        contact = db.get_contact(selected_id)
+        if not contact:
+            st.error("Non trovato.")
+            return
         full = " ".join(filter(None, [contact.get("first_name"), contact.get("last_name")])).strip() or "(senza nome)"
         st.subheader(full)
 
@@ -267,3 +471,13 @@ if selected_id:
                     st.text(it.get("content") or "")
         else:
             st.caption("Nessuna interazione.")
+
+
+# ============================================================
+# Dispatch
+# ============================================================
+
+if view == "grafo":
+    _render_graph()
+else:
+    _render_table()

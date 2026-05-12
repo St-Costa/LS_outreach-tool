@@ -522,9 +522,12 @@ def _render_table() -> None:
         linked = db.get_venues_for_contact(contact["id"])
         if linked:
             for v in linked:
-                vc1, vc2 = st.columns([5, 1])
+                vc1, vc2, vc3 = st.columns([4, 1, 1])
                 vc1.write(f"**{v['name']}** — {v.get('city','')} · {pipeline.label(v.get('pipeline_status'), pipeline.PIPELINE_LABELS)}")
-                if vc2.button("Scollega", key=f"unlink_v_{v['id']}"):
+                if vc2.button("Apri", key=f"open_v_{v['id']}"):
+                    st.session_state["venue_edit_id"] = v["id"]
+                    st.switch_page("pages/1_Venue.py")
+                if vc3.button("Scollega", key=f"unlink_v_{v['id']}"):
                     db.unlink_venue_contact(v["id"], contact["id"])
                     st.rerun()
         else:
@@ -549,10 +552,13 @@ def _render_table() -> None:
         linked_orgs = db.get_organizers_for_contact(contact["id"])
         if linked_orgs:
             for o in linked_orgs:
-                oc1, oc2 = st.columns([5, 1])
+                oc1, oc2, oc3 = st.columns([4, 1, 1])
                 meta = f" — {o['type']}" if o.get("type") else ""
                 oc1.write(f"🏛 **{o['name']}**{meta}" + (f" · {o.get('hq_city')}" if o.get("hq_city") else ""))
-                if oc2.button("Scollega", key=f"unlink_o_{o['id']}"):
+                if oc2.button("Apri", key=f"open_o_{o['id']}"):
+                    st.session_state["selected_organizer_id"] = o["id"]
+                    st.switch_page("pages/4_Enti.py")
+                if oc3.button("Scollega", key=f"unlink_o_{o['id']}"):
                     db.unlink_organizer_contact(o["id"], contact["id"])
                     st.rerun()
         else:

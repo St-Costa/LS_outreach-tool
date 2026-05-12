@@ -7,6 +7,7 @@ from pathlib import Path
 import streamlit as st
 
 from lib import db, importer, pipeline, ui
+from lib.batch_followup_ui import render_batch_button
 from lib.settings import has_api_key
 
 st.set_page_config(
@@ -131,6 +132,8 @@ def main():
 
     # Banner follow-up dovuti: severità per giorni di ritardo (≥14 = error, 7-13 = warning)
     overdue = _compute_overdue(venues)
+    if overdue:
+        render_batch_button(key_prefix="home")
     if overdue:
         critical = [t for t in overdue if t[0] >= 14]
         oldest_days, oldest_venue, _ = overdue[0]

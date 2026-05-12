@@ -32,6 +32,7 @@ MODEL_BY_TASK = {
     "enrich_venue": MODEL_HAIKU,
     "suggest_channel": MODEL_HAIKU,
     "analyze_response": MODEL_HAIKU,
+    "route_followup_need": MODEL_HAIKU,
     # PDF input richiede Sonnet (Haiku attualmente non supporta `document` blocks)
     "summarize_attachment": MODEL,
 }
@@ -394,6 +395,17 @@ SUGGEST_CHANNEL_SCHEMA = {
         "rationale": {"type": "string"},
     },
     "required": ["primary_channel", "fallback_channel", "rationale"],
+    "additionalProperties": False,
+}
+
+
+ROUTE_FOLLOWUP_NEED_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "needs_discovery": {"type": "boolean"},
+        "reason": {"type": "string"},
+    },
+    "required": ["needs_discovery", "reason"],
     "additionalProperties": False,
 }
 
@@ -1240,6 +1252,89 @@ def analyze_outreach_approach(
 
     _log_llm_call("analyze_outreach_approach", MODEL, cumulative_usage, duration_ms, meta=meta)
     return result
+
+
+def route_followup_need(
+    venue: dict,
+    current_contact: Optional[dict],
+    fu_count: int,
+    days_since_last_outgoing: int,
+    last_received_excerpt: Optional[str] = None,
+) -> dict:
+    """Router veloce (Haiku, no web search): decide se un follow-up beneficerebbe
+    da una rivalutazione web (analyze_outreach_approach) o se basta un draft diretto.
+
+    Contesto minimo per stare economico: solo nome venue, contatto usato, count FU,
+    giorni dall'ultima uscente, eventuale estratto dell'ultima risposta (200 char).
+
+    Output: {needs_discovery: bool, reason: str (≤120 char)}.
+    """
+    speakers, profile = _ctx()
+
+    parts: list[str] = []
+    parts.append(
+        f"=== VENUE ===\n"
+        f"Nome: {venue.get('name', '')}\n"
+        f"Tipo: {venue.get('type') or '-'}\n"
+        f"Città: {venue.get('city') or '-'}"
+    )
+    if venue.get("acceptance_score"):
+        parts.append(f"acceptance_score precedente: {venue['acceptance_score']}/3")
+    else:
+        parts.append("acceptance_score precedente: mai assegnato")
+
+    if current_contact:
+        cc_name = " ".join(filter(None, [
+            current_contact.get("first_name"), current_contact.get("last_name")
+        ])).strip() or "(senza nome)"
+        cc_email = current_contact.get("email") or "(no email)"
+        cc_role = current_contact.get("role") or "(no ruolo)"
+        parts.append(
+            f"=== CONTATTO USATO ===\n{cc_name} · {cc_role} · {cc_email}"
+        )
+    else:
+        parts.append(
+            "=== CONTATTO USATO ===\n"
+            "(indirizzo generico della venue, nessun contatto specifico)"
+        )
+
+    parts.append(
+        f"=== STATO OUTREACH ===\n"
+        f"Mail uscenti già inviate (incluso primo contatto): {fu_count}\n"
+        f"Giorni dall'ultima mail: {days_since_last_outgoing}"
+    )
+    if last_received_excerpt:
+        parts.append(
+            f"=== ULTIMA RISPOSTA (estratto) ===\n{last_received_excerpt[:200]}"
+        )
+    else:
+        parts.append("=== ULTIMA RISPOSTA ===\n(nessuna risposta mai ricevuta)")
+
+    parts.append(
+        "=== TASK ===\n"
+        "Decidi se questo follow-up beneficerebbe da una RIVALUTAZIONE WEB (web "
+        "search per verificare se il contatto attuale è davvero il migliore e per "
+        "rivalutare il fit del progetto con la venue), oppure se basta un follow-up "
+        "DIRETTO scritto sulla base del contesto già disponibile.\n\n"
+        "La rivalutazione web ha senso quando: contatto è una casella generica "
+        "(info@, segreteria@…), molti tentativi senza risposta, segnali di "
+        "disinteresse o richiesta di altro referente nelle risposte, fit mai "
+        "valutato, contatto poco identificabile (manca cognome o ruolo).\n"
+        "Non serve quando: contatto è una persona identificata con ruolo+email "
+        "diretta, ancora 1-2 tentativi, nessun segnale che il contatto sia "
+        "sbagliato.\n\n"
+        "Rispondi in JSON: needs_discovery (bool), reason (max 120 caratteri, "
+        "italiano, motivazione concreta basata sui segnali sopra)."
+    )
+    user_text = "\n\n".join(parts)
+    return _call_json(
+        system_blocks=_build_system_blocks(speakers, profile),
+        user_text=user_text,
+        schema=ROUTE_FOLLOWUP_NEED_SCHEMA,
+        max_tokens=400,
+        task="route_followup_need",
+        model=MODEL_BY_TASK["route_followup_need"],
+    )
 
 
 def _build_venue_dossier(v: dict) -> str:

@@ -4,6 +4,7 @@ from __future__ import annotations
 import streamlit as st
 
 from lib import claude, db, pipeline, ui
+from lib.batch_followup_ui import render_batch_button
 
 st.set_page_config(page_title="Venue", layout="wide")
 ui.apply_global_style()
@@ -467,6 +468,9 @@ st.markdown(
 
 def _escape(s: str) -> str:
     return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+render_batch_button(key_prefix="venue")
 
 
 # Render colonne

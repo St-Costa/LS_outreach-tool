@@ -10,7 +10,6 @@ from __future__ import annotations
 
 from itertools import combinations
 
-import pandas as pd
 import streamlit as st
 from streamlit_agraph import Config, Edge, Node, agraph
 
@@ -406,24 +405,54 @@ def _render_table() -> None:
     )
 
     if contacts:
-        rows = []
+        # Header riga
+        h = st.columns([3, 2, 3, 1, 4])
+        h[0].markdown("**Nome**")
+        h[1].markdown("**Ruolo**")
+        h[2].markdown("**Email**")
+        h[3].markdown("**Lingua**")
+        h[4].markdown("**Venue / Enti collegati**")
+
+        rows_meta = []  # per selectbox / CSV downstream
         for c in contacts:
             venues = db.get_venues_for_contact(c["id"])
-            rows.append({
-                "id": c["id"],
-                "Nome": " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)",
-                "Ruolo": c.get("role") or "",
-                "Email": c.get("email") or "",
-                "Lingua": c.get("language_pref") or "",
-                "Venue collegate": ", ".join(v["name"] for v in venues) or "—",
-            })
-        df = pd.DataFrame(rows)
-        st.dataframe(df.drop(columns=["id"]), use_container_width=True, hide_index=True)
+            orgs = db.get_organizers_for_contact(c["id"])
+            full = " ".join(filter(None, [c.get("first_name"), c.get("last_name")])).strip() or "(senza nome)"
+            rows_meta.append({"id": c["id"], "Nome": full})
+
+            row = st.columns([3, 2, 3, 1, 4])
+            row[0].write(full)
+            row[1].write(c.get("role") or "—")
+            row[2].write(c.get("email") or "—")
+            row[3].write(c.get("language_pref") or "—")
+            with row[4]:
+                if not venues and not orgs:
+                    st.caption("—")
+                else:
+                    for v in venues:
+                        if st.button(
+                            f"📍 {v['name']}",
+                            key=f"open_v_from_search_{c['id']}_{v['id']}",
+                            type="tertiary",
+                            help="Apri la pagina della venue",
+                        ):
+                            st.session_state["venue_edit_id"] = v["id"]
+                            st.switch_page("pages/1_Venue.py")
+                    for o in orgs:
+                        if st.button(
+                            f"🏛 {o['name']}",
+                            key=f"open_o_from_search_{c['id']}_{o['id']}",
+                            type="tertiary",
+                            help="Apri la pagina dell'ente",
+                        ):
+                            st.session_state["selected_organizer_id"] = o["id"]
+                            st.switch_page("pages/4_Enti.py")
+
         selected_id = st.selectbox(
             "Seleziona contatto per dettaglio",
             options=[None] + [c["id"] for c in contacts],
             format_func=lambda i: "—" if i is None else next(
-                r["Nome"] for r in rows if r["id"] == i
+                r["Nome"] for r in rows_meta if r["id"] == i
             ),
             key="contacts_detail_select",
         )

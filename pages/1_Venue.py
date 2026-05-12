@@ -137,13 +137,19 @@ if edit_id:
         ev_province = c1.text_input("Provincia (sigla)", value=venue.get("province") or "")
         ev_region = c2.text_input("Regione", value=venue.get("region") or "")
         ev_website = c1.text_input("Sito", value=venue.get("website") or "")
-        ev_lang = c2.selectbox("Lingua", ["IT", "EN", "DE", "IT/DE"],
-                                 index=["IT", "EN", "DE", "IT/DE"].index(venue.get("language") or "IT"))
-        ev_funding = c1.selectbox("Tipo finanziamento", ["", "pubblico", "privato", "associazione", "cooperativa"],
-                                   index=["", "pubblico", "privato", "associazione", "cooperativa"].index(venue.get("funding_type") or ""))
+        _lang_opts = ["IT", "EN", "DE", "IT/DE"]
+        _cur_lang = venue.get("language") or "IT"
+        ev_lang = c2.selectbox("Lingua", _lang_opts,
+                                 index=_lang_opts.index(_cur_lang) if _cur_lang in _lang_opts else 0)
+        _fund_opts = ["", "pubblico", "privato", "associazione", "cooperativa"]
+        _cur_fund = venue.get("funding_type") or ""
+        ev_funding = c1.selectbox("Tipo finanziamento", _fund_opts,
+                                   index=_fund_opts.index(_cur_fund) if _cur_fund in _fund_opts else 0)
         angle_options = [""] + pipeline.ANGLES
+        _current_angle = venue.get("angle") or ""
+        _angle_index = angle_options.index(_current_angle) if _current_angle in angle_options else 0
         ev_angle = c2.selectbox("Angolo", angle_options,
-                                  index=angle_options.index(venue.get("angle") or ""),
+                                  index=_angle_index,
                                   format_func=lambda x: "" if not x else pipeline.ANGLE_LABELS.get(x, x))
         current_state = pipeline.normalize_state(venue.get("pipeline_status"))
         ev_status = c1.selectbox("Stato pipeline", pipeline.PIPELINE_STATES,

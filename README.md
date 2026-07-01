@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="L&S Outreach Tool" width="360">
+</p>
+
 # L&S Outreach Tool
 
 Tool desktop **single-user** per outreach B2B di Luca Nesler & Stefano (speaker/formatori).

@@ -6,7 +6,6 @@
 
 <p align="center">
   <em>An LLM-native CRM for high-touch, low-volume B2B outreach.</em><br>
-  Built for two professional speakers who need every cold email to read like a human wrote it.
 </p>
 
 <p align="center">
@@ -30,29 +29,20 @@ networks across Italy. The shape of that problem does not fit any CRM on the mar
 | **Personalization** | templates + merge tags | every email must prove we understood *that* specific club |
 | **Cycle length** | days to weeks | weeks to months, with planned follow-ups |
 | **Channels** | email + maybe LinkedIn | email, Instagram DM, LinkedIn DM, phone, in person |
-| **What compounds** | lead volume | *institutional memory* — what worked at the last Rotary club |
 
-HubSpot, Pipedrive and Lemlist are built for SaaS sales motions with industrial scripting. For two
-people selling their own voice at 3–4 events a month, they are the wrong machine at the wrong scale —
-and their tone is wrong in a way that burns the relationship on the first send.
-
-So the interesting problem wasn't "build a CRM." It was: **how do you get an LLM to write in Italian
-without sounding like an LLM?** Generic AI-slop email is worse than no email at all — it costs you the
-prospect permanently. That constraint drove nearly every design decision below.
+Clearly we didn't need a full-sized CRM, so I built what we needed.
 
 ## What it does
 
-A local desktop app that acts as a **copilot, not an autopilot**. It never sends anything.
-
 1. **Discovers** new venues via Claude with live web search, scoped by region and filtered against a
-   project profile — returning structured candidates with contact, channel and fit score.
+   project profile, returning structured candidates with contact, channel and fit score.
 2. **Assembles a dossier** before every email: project profile, speaker bios, the venue's full history,
    the parent organization and its sibling venues, and *what was written to similar venues before*.
 3. **Drafts** the email against a 750-line style guide, then accepts natural-language refinement
    ("more informal", "drop the reference to X", "cut it 30%").
 4. **Hands off to the human.** You copy the draft into Aruba webmail / LinkedIn / Instagram and send it
-   yourself. You then paste back what you actually sent — which may differ from the draft, and both are kept.
-5. **Analyzes replies** you paste in — sentiment, meeting signals, rejection signals — and advances the
+   yourself. You then paste back what you actually sent.
+5. **Analyzes replies** you paste in and advances the
    pipeline state automatically.
 6. **Times follow-ups**, including telling you *not* to follow up yet.
 
@@ -75,54 +65,32 @@ A local desktop app that acts as a **copilot, not an autopilot**. It never sends
 </tr>
 </table>
 
-## Design decisions worth defending
+## Design decisions
 
-**The intelligence lives in the prompts, not in a model.** No fine-tuning, no vector DB, no proprietary
-ML pipeline. The leverage comes entirely from the dossier assembled before each call — in particular the
-*cross-venue* history. If I've already written to three Rotary clubs in the region, the model gets to see
-what landed and what didn't. The system gets better the more it's used, without any training loop.
-
-**Anti-AI-slop is treated as an engineering problem.** `email_guidelines.md` is the most carefully
-maintained file in the repo — 750 lines of constraints that ban *mechanisms*, not just vocabulary.
-Concretely, how it works:
-
+**Anti-AI-slop.** `email_guidelines.md` is the most carefully maintained file in the repo — 750 lines of
+constraints that ban *mechanisms*, not just words. Concretely:
 - **Rule Zero, anti-hallucination.** For every proper noun, sector, city, number or date in the draft,
   the model must be able to point at the exact line of the project profile or speaker bio it came from.
-  Turning "a corporate client" into "a winery in Trentino" is a violation, not a helpful specification.
-- **Literal blacklists with zero tolerance.** Banned words, banned opening patterns, banned closing
+- **Blacklists.** Banned words, banned opening patterns, banned closing
   patterns, banned self-congratulation, banned passive-aggression, and banned "explaining the recipient's
   own industry back to them."
 - **Numeric budgets.** At most one "not X, but Y" construction. Zero em-dashes anywhere in the body.
   Zero colons in the pitch paragraph, where "label: explanation" is the tell-tale LLM cadence.
-- **Substitution counts as evasion.** Swapping a banned word for a synonym that preserves the underlying
-  pattern is explicitly a violation. The pattern has to go, not be camouflaged.
 - **A mandatory self-check before emitting.** The model walks a numbered checklist over its own draft.
   Is the opening anchored to *them*? Is every example actually named? Does the closing ask an operational
   question rather than permission to exist? If a single item fails, it rewrites before returning.
 
 The file is read *fresh on every call*, so tuning the prompt takes effect immediately, with no restart
-and no deploy. Prompt curation is a continuous activity, and it shouldn't be gated behind a release.
+and no deploy.
 
 **A draft is not a sent email.** This tool was never meant to spam anyone. It exists to let me and my
 business partner move faster on outreach we were already doing by hand, and to share the state of it
-between us — so the system has to be scrupulous about the difference between what was *written* and
-what was actually *sent*. Every outbound interaction carries an `is_draft` flag, and drafts are excluded
-from outbound counts, from the LLM's context, and from follow-up timing. Without it the system generated
-follow-ups saying "further to my email last week" about emails that had only ever existed locally.
-
-**No email integration, deliberately.** The manual copy/paste is a five-second friction that buys total
-channel flexibility and, more importantly, guarantees a human reads every message before a prospect does.
-The expensive error here is sending one bad email, and human friction prevents it better than any classifier.
-
-**Local-first, single-user, single file.** SQLite, no auth, no cloud, no multi-tenancy, no daemon.
-Backup is `cp`. The expected ceiling is <1k venues and <10k interactions; the architecture is sized
-honestly for that rather than for an imagined scale.
-
-**The API key is encrypted at rest.** Fernet-encrypted in the DB, master key in `~/.config/` at `0600` —
-not `.env`, not an env var, not `st.secrets`, so it can't leak through a shared DB dump or a synced folder.
+between us. The manual copy/paste is a five-second friction that guarantees a human reads every message before a prospect does.
 
 ## Architecture
 
+**Scale:** ~11k lines of Python, 17 SQLite tables, 11 Streamlit pages, 10 domain modules.
+Average cost of a drafted first email: **$0.02–0.05**.
 ```
 ┌──────────────────────────────────────────────────────┐
 │  app.py + pages/     Streamlit UI (11 pages)         │
@@ -142,19 +110,3 @@ not `.env`, not an env var, not `st.secrets`, so it can't leak through a shared 
   lib/prompts  ·  project profile  ·  speaker bios
   ·  email_guidelines.md (read fresh per call)
 ```
-
-**Stack:** Python 3.12 · Streamlit · SQLite · Anthropic API (`claude-sonnet-4-6` for drafting and
-discovery, `claude-haiku-4-5` for short classification tasks) · Folium · Fernet.
-All LLM calls use structured output via `output_config.format=json_schema`; system blocks carry two
-`cache_control` breakpoints for prompt caching.
-
-**Scale:** ~11k lines of Python, 17 SQLite tables, 11 Streamlit pages, 10 domain modules.
-Average cost of a drafted first email: **$0.02–0.05**.
-
-> **A note on language:** the UI, the code comments, the variable names and the prompts are all in
-> Italian. That's deliberate — the product writes Italian business correspondence, and an
-> internationalization layer would have been pure overhead for a single-user tool.
-
----
-
-<p align="center"><sub>Built by <a href="https://github.com/St-Costa">Stefano Costa</a> · a working tool, not a demo</sub></p>

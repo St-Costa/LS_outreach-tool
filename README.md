@@ -58,19 +58,19 @@ A local desktop app that acts as a **copilot, not an autopilot**. It never sends
 
 ## Screenshots
 
-> Prospect names, pipeline states and email subjects are real business data and are redacted here.
+> These are real working sessions, not mockups. Prospect names are redacted where they appear.
 
 <table>
 <tr>
-<td width="50%"><img src="assets/screenshots/home.png" alt="Dashboard"><br><sub><b>Dashboard</b> — pipeline KPIs, overdue follow-ups ranked by staleness, upcoming deadlines.</sub></td>
+<td width="50%"><img src="assets/screenshots/home.png" alt="Dashboard"><br><sub><b>Dashboard</b> — pipeline KPIs at a glance, plus a banner surfacing overdue follow-ups ranked by staleness.</sub></td>
 <td width="50%"><img src="assets/screenshots/venue.png" alt="Venue kanban"><br><sub><b>Venues</b> — kanban by pipeline state, with per-venue fit score and one-click entry into the conversation.</sub></td>
 </tr>
 <tr>
-<td><img src="assets/screenshots/discovery.png" alt="Discovery"><br><sub><b>Discovery</b> — LLM + web search finds new venues. Runs persist in the DB and are replayable step by step.</sub></td>
+<td><img src="assets/screenshots/discovery.png" alt="Discovery run log"><br><sub><b>Discovery</b> — a completed run, replayed. Every web search the model issued is logged to the DB, so a run that took 11 minutes stays auditable afterwards.</sub></td>
 <td><img src="assets/screenshots/mappa.jpg" alt="Map"><br><sub><b>Map</b> — venues geocoded and colored by pipeline state, filterable by type, state and angle.</sub></td>
 </tr>
 <tr>
-<td><img src="assets/screenshots/costi.png" alt="LLM cost tracking"><br><sub><b>LLM economics</b> — token and spend accounting per task and model. Prompt caching keeps the cache-hit rate above 60%.</sub></td>
+<td><img src="assets/screenshots/costi.png" alt="LLM cost tracking"><br><sub><b>LLM economics</b> — token and spend accounting per task and model, showing where Sonnet is worth it and where Haiku is enough. Prompt caching holds the cache-hit rate at 63%.</sub></td>
 <td><img src="assets/screenshots/statistiche.png" alt="Statistics"><br><sub><b>Statistics</b> — aggregate pipeline and interaction metrics, broken down per speaker.</sub></td>
 </tr>
 </table>

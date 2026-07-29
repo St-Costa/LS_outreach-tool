@@ -65,7 +65,7 @@ st.divider()
 
 # ---------- Import venue iniziali ----------
 st.header("Importa venue iniziali")
-st.caption("Legge `vanue 1.md` e `vanue 2.md` da `data/source/` (fallback: cartella radice). Idempotente: salta venue già presenti per nome.")
+st.caption("Legge `venue 1.md` e `venue 2.md` da `data/source/` (fallback: cartella radice). Idempotente: salta venue già presenti per nome.")
 
 found_files = importer.find_default_files(BASE_DIR)
 if found_files:
@@ -73,7 +73,7 @@ if found_files:
     for f in found_files:
         st.write(f"- `{f.relative_to(BASE_DIR)}`")
 else:
-    st.info("Nessun file `vanue 1.md` / `vanue 2.md` trovato in `data/source/` o nella radice `" + str(BASE_DIR) + "`")
+    st.info("Nessun file `venue 1.md` / `venue 2.md` trovato in `data/source/` o nella radice `" + str(BASE_DIR) + "`")
 
 if st.button("Importa ora", disabled=not found_files):
     with st.spinner("Parsing in corso..."):

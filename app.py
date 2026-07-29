@@ -156,7 +156,7 @@ def main():
     base = Path(__file__).resolve().parent
     if importer.find_default_files(base) and len(venues) == 0:
         st.info(
-            "I file sorgente `vanue 1.md` / `vanue 2.md` sono presenti ma il database è vuoto. "
+            "I file sorgente `venue 1.md` / `venue 2.md` sono presenti ma il database è vuoto. "
             "Vai su **Impostazioni → Importa venue iniziali**."
         )
 

@@ -1,4 +1,4 @@
-"""Parser dei markdown sorgente (`vanue 1.md`, `vanue 2.md`) in record venue.
+"""Parser dei markdown sorgente (`venue 1.md`, `venue 2.md`) in record venue.
 
 Eseguito una volta all'avvio iniziale (pagina Impostazioni → "Importa venue iniziali")
 o dai test. Idempotente: salta venue già presenti per nome. Inferisce automaticamente
@@ -276,8 +276,9 @@ def import_files(paths: list[Path]) -> dict:
 
 
 def find_default_files(base_dir: Path) -> list[Path]:
-    """Cerca i markdown sorgente in `base_dir/data/source/` (preferito) e poi `base_dir/` (fallback legacy). Dedup per nome."""
-    names = ["vanue 1.md", "vanue 2.md", "venue 1.md", "venue 2.md"]
+    """Cerca i markdown sorgente in `base_dir/data/source/` (preferito) e poi `base_dir/` (fallback legacy).
+    Accetta anche il refuso storico `vanue *.md` per retrocompatibilità con installazioni esistenti. Dedup per nome."""
+    names = ["venue 1.md", "venue 2.md", "vanue 1.md", "vanue 2.md"]
     search_dirs = [base_dir / "data" / "source", base_dir]
     found: list[Path] = []
     seen: set[str] = set()

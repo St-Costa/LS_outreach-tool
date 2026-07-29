@@ -1,4 +1,4 @@
-"""Smoke test for importer on vanue 1.md / vanue 2.md."""
+"""Smoke test for importer on venue 1.md / venue 2.md."""
 from __future__ import annotations
 
 import sys
@@ -20,7 +20,7 @@ def main():
     db.init_db()
 
     files = importer.find_default_files(BASE)
-    assert files, "Nessun file vanue trovato"
+    assert files, "Nessun file venue trovato"
     print(f"File trovati: {[f.name for f in files]}")
 
     result = importer.import_files(files)

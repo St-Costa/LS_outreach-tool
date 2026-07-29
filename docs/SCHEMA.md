@@ -210,6 +210,50 @@ Key-value store. Usato per: API key cifrata Fernet, flag di migrazione one-shot.
 
 ---
 
+### `llm_calls`
+Log di ogni chiamata Anthropic: token e durata per task/modello. Alimenta la pagina **Costi LLM**.
+
+| Campo | Tipo | Note |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `ts` | TIMESTAMP | |
+| `task` | TEXT | Es. `draft_first_email`, `discover_venues`, `analyze_response` |
+| `model` | TEXT | `claude-sonnet-4-6` o `claude-haiku-4-5-20251001` |
+| `input_tokens`, `output_tokens` | INTEGER | |
+| `cache_read_tokens`, `cache_creation_tokens` | INTEGER | Per il calcolo del cache-hit rate |
+| `duration_ms` | INTEGER | |
+| `error` | TEXT | Messaggio errore se la call è fallita |
+| `meta_json` | TEXT | Metadati extra per task |
+
+---
+
+### `attachments` + `interaction_attachments`
+Allegati (PDF, slide) collegati a una venue o a una singola interazione, con riassunto LLM opzionale
+(`summary_json`) o manuale (`summary_manual`). `interaction_attachments` è la junction M:N verso `interactions`.
+
+| Campo | Tipo | Note |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `venue_id`, `interaction_id` | INTEGER FK | Nullable, un allegato può non essere legato a un'interazione specifica |
+| `filename`, `mime`, `size`, `path` | — | Metadati file, storage su disco in `data/attachments/` |
+| `kind` | TEXT | Tipo allegato |
+| `summary_json` / `summary_manual` | TEXT | Riassunto LLM (`summarize_attachment`) o inserito a mano |
+
+---
+
+### `audit_log`
+Log generico before/after per operazioni di scrittura sensibili (JSON diff), usato per troubleshooting
+e recovery manuale — non esposto in UI.
+
+| Campo | Tipo | Note |
+|---|---|---|
+| `id` | INTEGER PK | |
+| `ts` | TIMESTAMP | |
+| `table_name`, `row_id`, `op` | — | Tabella/riga/operazione interessate |
+| `before_json` / `after_json` | TEXT | Stato prima/dopo |
+
+---
+
 ## Stati pipeline
 Definiti in [lib/pipeline.py:4-43](../lib/pipeline.py#L4-L43).
 
@@ -218,6 +262,7 @@ Definiti in [lib/pipeline.py:4-43](../lib/pipeline.py#L4-L43).
 | `da_contattare` | ⚪ Da contattare | bianco `#FFFFFF` | Default per nuove venue |
 | `contattata` | ⏳ Contattata | blu `#3B82F6` | In attesa di risposta |
 | `accettata` | 🟢 Accettata | verde `#00E676` | |
+| `interessati_futuro` | 💡 Interessati (altre venue) | ambra `#F59E0B` | Interesse espresso ma non per questa call/edizione |
 | `rifiutata` | 🔴 Rifiutata | rosso `#FF1744` | |
 | `ghostati` | 👻 Ghostati | grigio `#71717A` | Nessuna risposta dopo follow-up |
 

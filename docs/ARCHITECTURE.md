@@ -208,8 +208,8 @@ claude.draft_follow_up(venue, contact, last_interaction, response, days_since)
 **Perché**: il tool è desktop, gira in `cwd` arbitrario, non c'è una shell di processo definita per `.env`. Una master key in `~/.config/outreach/master.key` (perms 0o600) è più sicura di un `.env` dimenticato in cartelle sincronizzate, ed evita che la key finisca in dump del DB.
 **Trade-off**: se l'utente perde la master key, deve reincollare la API key in UI.
 
-### Pipeline a 5 stati invece di 8
-Lo spec aprile 2026 prevedeva 8 stati granulari (`risposta_ricevuta`, `meeting_fissato`, `presentazione_confermata`, `completata`, ...). Riduzione a 5 stati (`da_contattare, contattata, accettata, rifiutata, ghostati`): la granularità extra non veniva usata in pratica perché il vero "esito" è binario (accettato / rifiutato / ghosting), e il dettaglio meeting/presentazione è già nel campo `notes` o nelle interazioni. Migrazione legacy automatica in `init_db()`.
+### Pipeline a 6 stati invece di 8
+Lo spec aprile 2026 prevedeva 8 stati granulari (`risposta_ricevuta`, `meeting_fissato`, `presentazione_confermata`, `completata`, ...). Riduzione a 6 stati (`da_contattare, contattata, accettata, interessati_futuro, rifiutata, ghostati`): la granularità extra non veniva usata in pratica perché il vero "esito" è quasi sempre binario (accettato / rifiutato / ghosting), e il dettaglio meeting/presentazione è già nel campo `notes` o nelle interazioni. `interessati_futuro` è l'unica eccezione tenuta separata: segnala interesse espresso ma non per l'occasione contattata (es. un ente disponibile per un'edizione futura). Migrazione legacy automatica in `init_db()`.
 
 ### `organizers` aggiunti post-spec
 Lo spec trattava ogni venue come isolata. Nella pratica molte venue sono **club locali di un ente madre** (Rotary 2060, Lions Distretto 108, ateneo con più dipartimenti). Il modello `organizers` permette di:

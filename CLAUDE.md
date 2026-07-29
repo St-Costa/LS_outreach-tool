@@ -13,7 +13,7 @@ Stato: MVP completo (9/9 punti spec aprile 2026). Fase 2 = 0/4 (vedi [docs/legac
 ## Stack (versioni da [requirements.txt](requirements.txt))
 
 - Python 3.12, venv locale in `venv/`
-- `streamlit>=1.36` · `anthropic>=0.40` · `folium>=0.16` · `streamlit-folium>=0.20`
+- `streamlit>=1.36` · `anthropic>=0.40` · `folium>=0.16` · `streamlit-folium>=0.20` · `streamlit-agraph>=0.0.45`
 - `pandas>=2.0` · `requests>=2.31` · `python-dateutil>=2.8` · `cryptography>=42.0`
 - Modello LLM principale: `claude-sonnet-4-6` ([lib/claude.py:18](lib/claude.py#L18))
 - Modello LLM secondario: `claude-haiku-4-5-20251001` ([lib/claude.py:19](lib/claude.py#L19)) usato per task brevi/economici — vedi gotcha #3
@@ -38,7 +38,7 @@ Stato: MVP completo (9/9 punti spec aprile 2026). Fase 2 = 0/4 (vedi [docs/legac
 | [`lib/`](lib/) | Layer dominio: `db`, `claude`, `prompts`, `importer`, `pipeline`, `geocode`, `settings`, `ui` |
 | [`tests/`](tests/) | Smoke test (importer, organizers) |
 | [`data/outreach.db`](data/) | SQLite (gitignored) |
-| [`data/source/`](data/source/) | Markdown sorgente (`vanue 1.md`, `vanue 2.md`) per import iniziale |
+| [`data/source/`](data/source/) | Markdown sorgente (`venue 1.md`, `venue 2.md`) per import iniziale |
 | [`data/backups/`](data/) | Backup DB (gitignored) |
 | `data/streamlit.log` | Log run background (gitignored) |
 | `email_guidelines.md` | Linee guida email lette **fresh ad ogni call LLM** ([lib/prompts.py](lib/prompts.py)) |
@@ -49,7 +49,7 @@ Stato: MVP completo (9/9 punti spec aprile 2026). Fase 2 = 0/4 (vedi [docs/legac
 
 ## Schema DB (sintesi)
 
-13 tabelle, FK abilitate. **Dettagli completi in [docs/SCHEMA.md](docs/SCHEMA.md).**
+17 tabelle, FK abilitate. **Dettagli completi in [docs/SCHEMA.md](docs/SCHEMA.md).**
 
 ```
 organizers ─< venues >─ contacts (M:N venue_contacts, M:N organizer_contacts)

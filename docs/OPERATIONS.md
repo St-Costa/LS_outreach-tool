@@ -7,7 +7,7 @@ Procedure pratiche per gestire il tool al di fuori dello sviluppo: setup, backup
 ## Setup primo avvio
 
 ```bash
-cd /mnt/dati/Documents/L\&S\ outreach\ tool
+cd <root del repo>
 ./launch.sh
 ```
 
@@ -21,7 +21,7 @@ Al primo accesso:
 1. Apri **Impostazioni** dalla sidebar (`99_⚙_Impostazioni`)
 2. Incolla la API key Anthropic e click "Salva"
 3. Click "Testa connessione" → deve rispondere `OK — modello claude-sonnet-4-6`
-4. Sezione "Importa venue iniziali" → click "Importa ora" (legge `data/source/vanue 1.md` + `vanue 2.md`, idempotente)
+4. Sezione "Importa venue iniziali" → click "Importa ora" (legge `data/source/venue 1.md` + `venue 2.md`, idempotente)
 
 ---
 
@@ -52,7 +52,7 @@ cp data/outreach.db "data/backups/outreach_$(date +%Y%m%d_%H%M%S).db"
 
 ```bash
 # crontab -e
-0 22 * * * cd "/mnt/dati/Documents/L&S outreach tool" && cp data/outreach.db "data/backups/outreach_$(date +\%Y\%m\%d).db"
+0 22 * * * cd "<root del repo>" && cp data/outreach.db "data/backups/outreach_$(date +\%Y\%m\%d).db"
 ```
 
 ---
@@ -86,8 +86,8 @@ mv data/outreach.db data/outreach_backup_$(date +%F).db
 ## Reimport venue iniziali
 
 I file sorgente vivono in `data/source/`:
-- `vanue 1.md` — venue Trentino-AA principali
-- `vanue 2.md` — venue aggiuntive
+- `venue 1.md` — venue Trentino-AA principali
+- `venue 2.md` — venue aggiuntive
 
 Pagina **Impostazioni → "Importa venue iniziali"** → "Importa ora". Idempotente: salta venue già presenti per nome.
 
@@ -191,9 +191,9 @@ pip install -r requirements.txt
 ```
 
 ### `data/source/` non trovata dopo update
-Se l'app dice "Nessun file vanue trovato" ma i file sono nella radice del progetto (versione legacy):
-- Sposta in `data/source/`: `mkdir -p data/source && mv "vanue 1.md" "vanue 2.md" data/source/`
-- `find_default_files()` cerca prima in `data/source/` poi nella radice come fallback
+Se l'app dice "Nessun file venue trovato" ma i file sono nella radice del progetto (versione legacy):
+- Sposta in `data/source/`: `mkdir -p data/source && mv "venue 1.md" "venue 2.md" data/source/`
+- `find_default_files()` cerca prima in `data/source/` poi nella radice come fallback; accetta anche il vecchio nome `vanue *.md` per retrocompatibilità
 
 ---
 
@@ -223,7 +223,7 @@ Con bozza:   51/51
 |---|---|
 | `data/outreach.db` | SQLite database (escluso da git) |
 | `data/backups/*.db` | Backup manuali (esclusi da git) |
-| `data/source/vanue *.md` | Sorgenti import iniziale (versionati in git) |
+| `data/source/venue *.md` | Sorgenti import iniziale (versionati in git) |
 | `data/streamlit.log` | Log run background (escluso da git) |
 | `~/.config/outreach/master.key` | Master key Fernet (NON in repo) |
 | `.streamlit/config.toml` | Config Streamlit (escluso da git via `.gitignore`) |

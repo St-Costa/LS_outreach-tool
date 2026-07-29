@@ -83,15 +83,32 @@ ML pipeline. The leverage comes entirely from the dossier assembled before each 
 what landed and what didn't. The system gets better the more it's used, without any training loop.
 
 **Anti-AI-slop is treated as an engineering problem.** `email_guidelines.md` is the most carefully
-maintained file in the repo: a ~40-word literal blacklist, a "Rule Zero" forbidding the model from
-inventing, inferring or "making more specific" any fact not literally present in the profiles, and
-explicit bans on self-congratulatory and fake-adoption-frequency patterns. It's read *fresh on every
-call*, so tuning the prompt never requires a restart or a deploy.
+maintained file in the repo — 750 lines of constraints that ban *mechanisms*, not just vocabulary.
+Concretely, how it works:
 
-**A draft is not a sent email.** Every outbound interaction carries an `is_draft` flag. Drafts are
-excluded from outbound counts, from the LLM's context, and from follow-up timing. Without it the system
-generated follow-ups saying "further to my email last week" about emails that only ever existed locally —
-a small flag that prevents a genuinely embarrassing failure mode.
+- **Rule Zero, anti-hallucination.** For every proper noun, sector, city, number or date in the draft,
+  the model must be able to point at the exact line of the project profile or speaker bio it came from.
+  Turning "a corporate client" into "a winery in Trentino" is a violation, not a helpful specification.
+- **Literal blacklists with zero tolerance.** Banned words, banned opening patterns, banned closing
+  patterns, banned self-congratulation, banned passive-aggression, and banned "explaining the recipient's
+  own industry back to them."
+- **Numeric budgets.** At most one "not X, but Y" construction. Zero em-dashes anywhere in the body.
+  Zero colons in the pitch paragraph, where "label: explanation" is the tell-tale LLM cadence.
+- **Substitution counts as evasion.** Swapping a banned word for a synonym that preserves the underlying
+  pattern is explicitly a violation. The pattern has to go, not be camouflaged.
+- **A mandatory self-check before emitting.** The model walks a numbered checklist over its own draft.
+  Is the opening anchored to *them*? Is every example actually named? Does the closing ask an operational
+  question rather than permission to exist? If a single item fails, it rewrites before returning.
+
+The file is read *fresh on every call*, so tuning the prompt takes effect immediately, with no restart
+and no deploy. Prompt curation is a continuous activity, and it shouldn't be gated behind a release.
+
+**A draft is not a sent email.** This tool was never meant to spam anyone. It exists to let me and my
+business partner move faster on outreach we were already doing by hand, and to share the state of it
+between us — so the system has to be scrupulous about the difference between what was *written* and
+what was actually *sent*. Every outbound interaction carries an `is_draft` flag, and drafts are excluded
+from outbound counts, from the LLM's context, and from follow-up timing. Without it the system generated
+follow-ups saying "further to my email last week" about emails that had only ever existed locally.
 
 **No email integration, deliberately.** The manual copy/paste is a five-second friction that buys total
 channel flexibility and, more importantly, guarantees a human reads every message before a prospect does.
@@ -137,38 +154,6 @@ Average cost of a drafted first email: **$0.02–0.05**.
 > **A note on language:** the UI, the code comments, the variable names and the prompts are all in
 > Italian. That's deliberate — the product writes Italian business correspondence, and an
 > internationalization layer would have been pure overhead for a single-user tool.
-
-## Running it
-
-```bash
-python3.12 -m venv venv
-source venv/bin/activate
-pip install -U -r requirements.txt
-
-./launch.sh      # background daemon on :8501, opens the browser
-./run.sh         # foreground (dev / live logs)
-./stop.sh        # stop the daemon
-```
-
-Set the Anthropic API key from the **Impostazioni** page in the app — it's encrypted with Fernet, with
-the master key stored at `~/.config/outreach/master.key`.
-
-```bash
-python tests/test_importer.py     # smoke tests are plain executable scripts,
-python tests/test_organizers.py   # each against a temporary DB — no pytest,
-python tests/test_pipeline.py     # no fixtures, no framework
-python tests/test_settings.py
-```
-
-## Documentation
-
-| Document | Contents |
-|---|---|
-| [CLAUDE.md](CLAUDE.md) | Working reference: stack, conventions, and the critical gotchas |
-| [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Module map, end-to-end flows, design rationale |
-| [docs/SCHEMA.md](docs/SCHEMA.md) | Full DB schema, foreign keys, migrations, pipeline states |
-| [docs/OPERATIONS.md](docs/OPERATIONS.md) | Backup, restore, troubleshooting, master key recovery |
-| [descrizione_progetto.md](descrizione_progetto.md) | Long-form project description (Italian) |
 
 ---
 

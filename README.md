@@ -11,9 +11,7 @@
 <p align="center">
   <img alt="Python" src="https://img.shields.io/badge/Python-3.12-3776AB?logo=python&logoColor=white">
   <img alt="Streamlit" src="https://img.shields.io/badge/Streamlit-1.36+-FF4B4B?logo=streamlit&logoColor=white">
-  <img alt="Claude" src="https://img.shields.io/badge/Claude-Sonnet%204.6-D97757?logo=anthropic&logoColor=white">
   <img alt="SQLite" src="https://img.shields.io/badge/SQLite-single%20file-003B57?logo=sqlite&logoColor=white">
-  <img alt="Status" src="https://img.shields.io/badge/status-in%20production-2ea44f">
   <a href="LICENSE"><img alt="License" src="https://img.shields.io/badge/license-MIT-blue"></a>
 </p>
 

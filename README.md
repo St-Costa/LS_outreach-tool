@@ -21,7 +21,7 @@
 
 ## Why I built this
 
-I do B2B outreach with Luca Nesler: we pitch ourselves as speakers and trainers to service clubs, trade fairs, innovation hubs, universities and local business
+I do B2B outreach with my business partner: we pitch ourselves as speakers and trainers to service clubs, trade fairs, innovation hubs, universities and local business
 networks across Italy. The shape of that problem does not fit any CRM on the market:
 
 | | Typical sales CRM | This use case |
@@ -48,8 +48,6 @@ Clearly we didn't need a full-sized CRM, so I built what we needed.
 6. **Times follow-ups**, including telling you *not* to follow up yet.
 
 ## Screenshots
-
-> These are real working sessions, not mockups. Prospect names are redacted where they appear.
 
 <table>
 <tr>
